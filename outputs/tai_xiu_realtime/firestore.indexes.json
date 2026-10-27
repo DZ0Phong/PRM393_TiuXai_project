@@ -1,0 +1,1 @@
+{"indexes":[{"collectionGroup":"rounds","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"closesAt","order":"ASCENDING"}]}],"fieldOverrides":[]}
