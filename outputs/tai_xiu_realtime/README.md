@@ -47,7 +47,7 @@ Giữ terminal emulator mở, terminal thứ hai:
 ```powershell
 flutter run -d chrome
 ```
-App mặc định EMULATORS=true, project demo-tai-xiu; Auth 9099, Firestore 8080, Functions 5001, UI Emulator 4000. Đăng ký email/password trong app (tài khoản emulator không phải tài khoản thật). Mở nhiều browser/incognito cho nhiều người. Dữ liệu emulator mặc định mất khi tắt; dùng --export-on-exit và --import nếu cần giữ dữ liệu.
+Khi `flutter run` ở debug, app mặc định EMULATORS=true; bản build release mặc định EMULATORS=false. Có thể đặt `--dart-define=EMULATORS=true` nếu cần build web để chạy với emulator. Project mặc định demo-tai-xiu; Auth 9099, Firestore 8080, Functions 5001, UI Emulator 4000. Đăng ký email/password trong app (tài khoản emulator không phải tài khoản thật). Mở nhiều browser/incognito cho nhiều người. Dữ liệu emulator mặc định mất khi tắt; dùng --export-on-exit và --import nếu cần giữ dữ liệu.
 
 Cấp admin cho UID hiện trong app (terminal khác):
 ```powershell
@@ -63,7 +63,7 @@ Android emulator truy cập máy host qua 10.0.2.2:
 ```powershell
 flutter run --dart-define=EMULATOR_HOST=10.0.2.2
 ```
-Debug manifest cho phép HTTP emulator; release chỉ dùng Firebase HTTPS. Nếu dùng điện thoại thật, cấu hình emulator bind mạng LAN và dùng IP máy host, chỉ trong mạng thử nghiệm tin cậy. Không dùng 127.0.0.1 của điện thoại.
+Debug manifest cho phép HTTP emulator; release mặc định không bật emulator và chỉ dùng Firebase HTTPS. Cấu hình Firebase thật bằng `config/firebase.local.json` (có `EMULATORS=false`) trước khi phát hành; không phát hành bản dùng cấu hình demo. Nếu dùng điện thoại thật, cấu hình emulator bind mạng LAN và dùng IP máy host, chỉ trong mạng thử nghiệm tin cậy. Không dùng 127.0.0.1 của điện thoại.
 
 ## Kiểm tra
 ```powershell
@@ -105,7 +105,7 @@ Tài liệu tham khảo: https://firebase.google.com/docs/flutter/setup ; https:
 - Xem “Cược toàn phòng”: UID, phía cược, số xu, ghi có; tổng Tài/Xỉu. Player chỉ đọc cược riêng.
 - Lịch sử ví hiện 30 dòng gần nhất; lịch sử cũ trước nâng cấp không tự backfill ledger, số dư không bị reset. users thiếu blocked mặc định coi là hoạt động; không cần migration reset dữ liệu.
 - Nếu thao tác ví mất kết nối: app giữ requestId và payload trong local storage. Tải lại/đăng nhập lại rồi bấm Thử lại thao tác chờ. Request đã xử lý sẽ trả kết quả cũ. Thao tác mới bị chặn cho đến khi thao tác chờ được xác nhận hoặc bị server từ chối dứt khoát. Đây là hỗ trợ retry trên cùng bộ nhớ app/browser; không thay thế đồng bộ nhiều tab hay kiểm toán server.
-- Workflow ở gốc repository `.github/workflows/ci.yml` chạy các lệnh trong `outputs/tai_xiu_realtime`: Flutter analyze/test/build Web/Android debug, Node unit/check/audit runtime và Emulator integration trên Node 22/Java 21. Cần push để GitHub Actions thực sự chạy; kiểm tra local không thay thế CI remote.
+- Workflow ở gốc repository `.github/workflows/ci.yml` chạy các lệnh trong `outputs/tai_xiu_realtime`: Flutter analyze/test/build Web/Android debug, Node unit/check/audit runtime và Emulator integration trên Node 22/Java 21. Theo dõi trạng thái GitHub Actions trên nhánh `Hiep`; kiểm tra local không thay thế CI remote.
 
 ## Tạo sẵn tài khoản demo cho 5 người
 Khi Emulator đang chạy, mở terminal tại project:

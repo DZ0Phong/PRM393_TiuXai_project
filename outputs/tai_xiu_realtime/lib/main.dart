@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +9,7 @@ import 'features/admin/admin_console.dart';
 import 'features/game/round_bets.dart';
 import 'core/pending_mutation.dart';
 
-const emulator = bool.fromEnvironment('EMULATORS', defaultValue: true);
+const emulator = bool.fromEnvironment('EMULATORS', defaultValue: kDebugMode);
 const host = String.fromEnvironment('EMULATOR_HOST', defaultValue: '127.0.0.1');
 final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
 Future<void> main() async {
@@ -406,7 +407,6 @@ class _LobbyState extends State<Lobby> {
                                             .inMilliseconds /
                                         1000)
                                     .ceil();
-                            final open = r['status'] == 'open' && seconds > 0;
                             return Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(16),
@@ -441,7 +441,7 @@ class _LobbyState extends State<Lobby> {
                                                   amount.text,
                                                 ),
                                               }),
-                                              enabled: open,
+                                              enabled: r['status'] == 'open',
                                             ),
                                           )
                                           .toList(),
@@ -467,7 +467,7 @@ class _LobbyState extends State<Lobby> {
                                               .toList(),
                                           'reason': reason.text.trim(),
                                         }),
-                                        enabled: !open && r['status'] == 'open',
+                                        enabled: r['status'] == 'open',
                                       ),
                                     if (isAdmin) ...[
                                       action(

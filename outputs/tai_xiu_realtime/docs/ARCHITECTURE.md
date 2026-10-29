@@ -11,7 +11,7 @@ Flutter → Firebase Auth (email/password) → Callable Functions (asia-southeas
 - auditLogs/{id}: actor UID, action, details, timestamp server. App không thể sửa/xóa. Người có quyền quản trị Firebase vẫn có thể sửa dữ liệu: đây chưa phải log chống giả mạo mật mã/WORM.
 
 ## Máy trạng thái
-Admin tạo OPEN (30 giây) → deadline server khóa nhận cược → SETTLED. UI hiển thị đếm ngược để tham khảo; chỉ server xác định cược có hợp lệ. Sau deadline status có thể còn open trong lúc đợi chốt nhưng không nhận cược. Scheduler mỗi phút chốt random (có thể trễ hơn deadline); emulator không tự chạy Cloud Scheduler nên admin chốt thủ công. Admin mode bắt buộc chốt thủ công. Phiên tiếp theo mở sau khi phiên trước settled hoặc cancelled.
+Admin tạo OPEN (30 giây) → deadline server khóa nhận cược → SETTLED. UI hiển thị đếm ngược để tham khảo; nút thao tác dựa trên trạng thái phiên, chỉ server xác định deadline và cược/chốt có hợp lệ. Sau deadline status có thể còn open trong lúc đợi chốt nhưng không nhận cược. Scheduler mỗi phút chốt random (có thể trễ hơn deadline); emulator không tự chạy Cloud Scheduler nên admin chốt thủ công. Admin mode bắt buộc chốt thủ công. Phiên tiếp theo mở sau khi phiên trước settled hoặc cancelled.
 
 Giao dịch mở phiên đọc rooms/main và phiên cũ để ngăn mở hai phiên đồng thời. Giao dịch cược đọc ví/phiên/cược trước mọi write, kiểm deadline/số dư/số người, trừ xu + tạo cược + log cùng transaction. Settlement đọc toàn bộ cược và ví trước write, trả xu và đánh dấu settled nguyên tử; nếu gọi lại trả ok không trả xu thêm. Transaction tự retry khi tranh chấp; tối đa 100 người để giữ số write nhỏ trong MVP. Chưa benchmark tải.
 
