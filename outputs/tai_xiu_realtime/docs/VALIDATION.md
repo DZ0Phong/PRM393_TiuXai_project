@@ -26,3 +26,12 @@ Build Android còn cảnh báo plugin dùng Kotlin Gradle Plugin/unchecked Java;
 Chưa kiểm thử tương tác browser/thiết bị Android bằng UI; test local storage là unit mock, test retry server là integration riêng, chưa tự động hóa toàn bộ mất mạng/reload end-to-end. Chưa deploy Firebase thật, kiểm scheduler/IAM/billing/App Check, benchmark 100 người hoặc ký release. Scheduler không chạy trong integration; random được chốt thủ công.
 
 Script seed-emulator đã chạy thành công trên Auth Emulator: tạo 1 Admin + 5 Player. Không gửi dữ liệu đến Firebase thật.
+
+## Cập nhật kiểm tra 29/10/2026 — sau sửa CI, dependency và pending mutation
+
+- Git checkout `main` tại commit gốc `815a92a`; thay đổi đang ở working tree, **chưa push**, nên workflow mới ở gốc repository chưa được GitHub Actions xác nhận.
+- Flutter 3.47.5 / Dart 3.13.4: `flutter analyze` không lỗi; `flutter test` **3/3 đạt** (thêm test từ chối ghi đè requestId/payload chờ); `flutter build web --no-pub` thành công.
+- Node unit **2/2 đạt**; `npm run check` đạt. `npm audit --omit=dev` **0 vulnerabilities** sau khi cập nhật lockfile: body-parser runtime 2.4.0, qs 6.16.2. Cây đầy đủ gồm dev tooling còn 18 cảnh báo (5 moderate, 13 high), chưa xử lý trong lần này.
+- Firebase Emulator integration **2/2 nhóm đạt** sau sửa, với `demo-tai-xiu`; scheduler `tick` không chạy vì chưa bật Pub/Sub emulator. Emulator trên máy dùng Node 24.13.0 dù `functions/package.json` yêu cầu Node 22; CI được cấu hình Node 22 nhưng chưa chạy remote.
+- Android wrapper đã đưa vào Git từ ZIP v2, `gradlew` giữ executable bit. Hai build Android chạy đồng thời gây lỗi cache Kotlin/resource; sau khi dừng build song song, `flutter clean`, `flutter pub get` và build tuần tự, `flutter build apk --debug --no-pub` **thành công** tại `build/app/outputs/flutter-apk/app-debug.apk`. Đây là debug APK, không phải release đã ký.
+- Chưa kiểm tra UI tương tác trên thiết bị/browser, mất mạng + reload end-to-end, Firebase production, scheduler thực, tải 100 người hoặc CI remote. Việc chặn race pending được kiểm bằng unit store và phân tích luồng UI, chưa có widget/e2e test cho chính thời điểm chuyển phiên đăng nhập.

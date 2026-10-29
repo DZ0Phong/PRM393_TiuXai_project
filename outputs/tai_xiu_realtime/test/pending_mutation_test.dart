@@ -33,4 +33,28 @@ void main() {
       );
     },
   );
+  test('Không ghi đè requestId chưa xác nhận khi mở lại store', () async {
+    final store = PendingMutationStore();
+    final first = <String, dynamic>{
+      'name': 'wallet',
+      'data': {
+        'requestId': 'first-request-123',
+        'kind': 'deposit',
+        'amount': 100,
+      },
+    };
+    await store.save('alice', first);
+    await expectLater(
+      PendingMutationStore().save('alice', {
+        'name': 'wallet',
+        'data': {
+          'requestId': 'second-request-123',
+          'kind': 'deposit',
+          'amount': 100,
+        },
+      }),
+      throwsStateError,
+    );
+    expect(await store.load('alice'), first);
+  });
 }

@@ -14,6 +14,10 @@ class PendingMutationStore {
 
   Future<void> save(String uid, Map<String, dynamic> value) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    if (prefs.getString(key(uid)) != null) {
+      throw StateError('Có thao tác chờ chưa xác nhận; không ghi đè requestId');
+    }
     if (!await prefs.setString(key(uid), jsonEncode(value))) {
       throw StateError('Không lưu được thao tác chờ; chưa gửi lên server');
     }

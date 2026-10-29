@@ -81,35 +81,42 @@ class _LobbyState extends State<Lobby> {
   final clock = ValueNotifier(DateTime.now());
   final pendingStore = PendingMutationStore();
   Map<String, dynamic>? pending;
+  String? pendingLoadedUid;
+  int authRevision = 0;
   StreamSubscription<User?>? auth;
   String get uid => FirebaseAuth.instance.currentUser!.uid;
   @override
   void initState() {
     super.initState();
     auth = FirebaseAuth.instance.authStateChanges().listen((user) async {
+      final revision = ++authRevision;
+      if (mounted) {
+        setState(() {
+          pendingLoadedUid = null;
+          pending = null;
+          isAdmin = false;
+        });
+      }
       if (user != null) {
         try {
           final token = await user.getIdTokenResult(true);
           await invoke('ensureProfile');
           final saved = await pendingStore.load(user.uid);
-          if (mounted && FirebaseAuth.instance.currentUser?.uid == user.uid) {
+          if (mounted &&
+              revision == authRevision &&
+              FirebaseAuth.instance.currentUser?.uid == user.uid) {
             setState(() {
               isAdmin = token.claims?['admin'] == true;
               pending = saved;
+              pendingLoadedUid = user.uid;
             });
           }
         } catch (e) {
-          if (mounted) setState(() => message = e.toString());
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            isAdmin = false;
-            pending = null;
-          });
+          if (mounted && revision == authRevision) {
+            setState(() => message = e.toString());
+          }
         }
       }
-      if (mounted) setState(() {});
     });
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       clock.value = DateTime.now();
@@ -154,6 +161,9 @@ class _LobbyState extends State<Lobby> {
     Map<String, dynamic> data = const {},
   ]) async {
     if (name == 'wallet' || name == 'adjustBalance') {
+      if (pendingLoadedUid != uid) {
+        throw StateError('Đang tải thao tác ví chờ xác nhận; vui lòng đợi');
+      }
       if (pending != null) {
         throw StateError(
           'Có thao tác ví chưa được xác nhận. Dùng nút Thử lại thao tác chờ.',
@@ -334,6 +344,8 @@ class _LobbyState extends State<Lobby> {
                             'requestId':
                                 '${uid}_${DateTime.now().microsecondsSinceEpoch}',
                           }),
+                          enabled:
+                              pendingLoadedUid == user.uid && pending == null,
                         ),
                       )
                       .toList(),

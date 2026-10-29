@@ -75,7 +75,7 @@ npm.cmd --prefix functions run check
 node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test functions/integration/emulator.test.js"
 flutter build apk --debug
 ```
-Test integration tự tạo tài khoản emulator, cấp role, chạy 5 Player, đặt cược trùng, chốt lặp, ví retry, thử chặn quyền; chỉ chạy với demo project. Đọc docs/VALIDATION.md để phân biệt đã chạy và chưa chạy. Test Flutter hiện là kiểm tra config, chưa phải kiểm thử UI đầy đủ. Nghiệm thu tương tác theo docs/ACCEPTANCE.md.
+Test integration tự tạo tài khoản emulator, cấp role, chạy 5 Player, đặt cược trùng, chốt lặp, ví retry, thử chặn quyền; chỉ chạy với demo project. Đọc docs/VALIDATION.md để phân biệt đã chạy và chưa chạy. Test Flutter hiện kiểm tra config và lưu/khôi phục/chống ghi đè thao tác chờ, chưa phải kiểm thử UI đầy đủ. Nghiệm thu tương tác theo docs/ACCEPTANCE.md.
 
 ## Cấu hình Firebase thật (chưa thực hiện)
 1. Tạo project Firebase riêng. Bật Auth Email/Password và tạo Firestore. Chọn region phù hợp, Functions code dùng asia-southeast1. Deploy Functions/scheduler cần project có billing phù hợp; kiểm tra console trước khi deploy.
@@ -105,7 +105,7 @@ Tài liệu tham khảo: https://firebase.google.com/docs/flutter/setup ; https:
 - Xem “Cược toàn phòng”: UID, phía cược, số xu, ghi có; tổng Tài/Xỉu. Player chỉ đọc cược riêng.
 - Lịch sử ví hiện 30 dòng gần nhất; lịch sử cũ trước nâng cấp không tự backfill ledger, số dư không bị reset. users thiếu blocked mặc định coi là hoạt động; không cần migration reset dữ liệu.
 - Nếu thao tác ví mất kết nối: app giữ requestId và payload trong local storage. Tải lại/đăng nhập lại rồi bấm Thử lại thao tác chờ. Request đã xử lý sẽ trả kết quả cũ. Thao tác mới bị chặn cho đến khi thao tác chờ được xác nhận hoặc bị server từ chối dứt khoát. Đây là hỗ trợ retry trên cùng bộ nhớ app/browser; không thay thế đồng bộ nhiều tab hay kiểm toán server.
-- Có workflow .github/workflows/ci.yml chạy Flutter checks/build web, Node unit và Emulator integration trên Node22/Java21 khi đưa folder dự án lên GitHub. Workflow được tạo nhưng chưa chạy trên GitHub trong phiên này.
+- Workflow ở gốc repository `.github/workflows/ci.yml` chạy các lệnh trong `outputs/tai_xiu_realtime`: Flutter analyze/test/build Web/Android debug, Node unit/check/audit runtime và Emulator integration trên Node 22/Java 21. Cần push để GitHub Actions thực sự chạy; kiểm tra local không thay thế CI remote.
 
 ## Tạo sẵn tài khoản demo cho 5 người
 Khi Emulator đang chạy, mở terminal tại project:
