@@ -1,0 +1,28 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tai_xiu_realtime/features/game/game_specs.dart';
+import 'package:tai_xiu_realtime/features/admin/admin_console.dart';
+import 'package:tai_xiu_realtime/main.dart';
+
+void main() {
+  test('Chỉ lỗi server dứt khoát mới xóa điều chỉnh chờ', () {
+    expect(definitiveAdjustError('invalid-argument'), isTrue);
+    expect(definitiveAdjustError('permission-denied'), isTrue);
+    expect(definitiveAdjustError('unavailable'), isFalse);
+    expect(definitiveAdjustError('deadline-exceeded'), isFalse);
+  });
+
+  test('Debug mặc định dùng emulator', () {
+    expect(emulator, isTrue);
+    expect(host, '127.0.0.1');
+  });
+
+  test('Ba phòng chơi riêng, kết quả quản trị được kiểm tra theo game', () {
+    expect(games.map((game) => game.id), ['tai_xiu', 'bau_cua', 'xoc_xoc']);
+    expect(parseRoundResult(games[0], '2, 3, 6'), [2, 3, 6]);
+    expect(parseRoundResult(games[0], '2,7,6'), isNull);
+    expect(parseRoundResult(games[1], 'bau,cua,tom'), ['bau', 'cua', 'tom']);
+    expect(parseRoundResult(games[1], 'bau,foo,tom'), isNull);
+    expect(parseRoundResult(games[2], '0,1,0,1'), [0, 1, 0, 1]);
+    expect(parseRoundResult(games[2], '0,1,2,1'), isNull);
+  });
+}

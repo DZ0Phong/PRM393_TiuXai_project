@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn() { return request.auth != null; }
+  function active() { return signedIn() && (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('blocked', false) != true); }
+  function admin() { return active() && request.auth.token.admin == true; }
+  match /users/{uid} {
+   allow read: if signedIn() && (request.auth.uid == uid || admin());
+   match /operations/{id} { allow read: if signedIn() && (request.auth.uid == uid || admin()); }
+  }
+  match /rooms/{id} { allow read: if active(); }
+  match /rounds/{id} {
+   allow read: if active();
+   match /bets/{uid} { allow read: if active() && (request.auth.uid == uid || admin()); }
+  }
+  match /auditLogs/{id} { allow read: if admin(); }
+  match /{document=**} { allow write: if false; }
+ }
+}
