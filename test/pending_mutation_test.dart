@@ -10,11 +10,12 @@ void main() {
     () async {
       final first = PendingMutationStore();
       final intent = <String, dynamic>{
-        'name': 'wallet',
+        'name': 'adjustBalance',
         'data': {
           'requestId': 'same-request-123',
-          'kind': 'deposit',
-          'amount': 100,
+          'uid': 'target',
+          'delta': 100,
+          'reason': 'Điều chỉnh thử nghiệm',
         },
       };
       await first.save('alice', intent);
@@ -22,7 +23,7 @@ void main() {
       expect(await reopened.load('alice'), intent);
       expect(await reopened.load('bob'), isNull);
       await reopened.save('bob', {
-        'name': 'wallet',
+        'name': 'adjustBalance',
         'data': {'requestId': 'bob-request-123'},
       });
       await reopened.clear('alice');
@@ -36,21 +37,23 @@ void main() {
   test('Không ghi đè requestId chưa xác nhận khi mở lại store', () async {
     final store = PendingMutationStore();
     final first = <String, dynamic>{
-      'name': 'wallet',
+      'name': 'adjustBalance',
       'data': {
         'requestId': 'first-request-123',
-        'kind': 'deposit',
-        'amount': 100,
+        'uid': 'target',
+        'delta': 100,
+        'reason': 'Điều chỉnh thử nghiệm',
       },
     };
     await store.save('alice', first);
     await expectLater(
       PendingMutationStore().save('alice', {
-        'name': 'wallet',
+        'name': 'adjustBalance',
         'data': {
           'requestId': 'second-request-123',
-          'kind': 'deposit',
-          'amount': 100,
+          'uid': 'target',
+          'delta': 100,
+          'reason': 'Điều chỉnh thử nghiệm',
         },
       }),
       throwsStateError,
