@@ -96,6 +96,12 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     await p.call('placeBet', {roundId: cancelled, side: 'xiu', amount: 100});
     await db.doc(`rounds/${cancelled}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     await boss.call('lockRound', {roundId: cancelled});
+    const beforeRefund = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
+    await db.doc(`users/${p.user.uid}`).update({balance: Number.MAX_SAFE_INTEGER});
+    await assert.rejects(boss.call('cancelRound', {roundId: cancelled, reason: 'Không thể hoàn điểm tràn số'}));
+    assert.equal((await db.doc(`rounds/${cancelled}`).get()).data().status, 'locked');
+    assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${cancelled}`).get()).exists, false);
+    await db.doc(`users/${p.user.uid}`).update({balance: beforeRefund});
     await Promise.all([1, 2].map(() => boss.call('cancelRound', {roundId: cancelled, reason: 'Hủy phiên thử nghiệm'})));
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 10400);
     assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${cancelled}`).get()).data().kind, 'refund');
@@ -110,9 +116,13 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     assert.equal(logs.docs[0].data().details.reason.length > 0, true);
     const other = await client(2); await other.call('ensureProfile');
     const race = await boss.call('startRound', {game: 'tai_xiu', mode: 'admin'});
-    await Promise.all([p, other].map(player => player.call('placeBet', {roundId: race.roundId, side: 'tai', amount: 100})));
+    await Promise.all([
+      p.call('placeBet', {roundId: race.roundId, side: 'tai', amount: 100}),
+      other.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 100}),
+    ]);
     await db.doc(`rounds/${race.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-    await assert.rejects(other.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 100}));
+    const late = await client(3); await late.call('ensureProfile');
+    await assert.rejects(late.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 100}));
     await boss.call('lockRound', {roundId: race.roundId});
     const raced = await Promise.allSettled([
       boss.call('cancelRound', {roundId: race.roundId, reason: 'Hủy cùng thời điểm'}),
@@ -124,6 +134,10 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const operation = (await db.doc(`users/${p.user.uid}/operations/result_${race.roundId}`).get()).data();
     assert.equal(operation.kind, final.status === 'cancelled' ? 'refund' : 'payout');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, final.status === 'cancelled' ? 10400 : 10500);
+    const otherResult = (await db.doc(`users/${other.user.uid}/operations/result_${race.roundId}`).get()).data();
+    assert.equal(otherResult.kind, final.status === 'cancelled' ? 'refund' : 'payout');
+    assert.equal(otherResult.delta, final.status === 'cancelled' ? 100 : 0);
+    assert.equal((await db.doc(`users/${other.user.uid}`).get()).data().balance, final.status === 'cancelled' ? 10000 : 9900);
     await boss.call('setPlayerBlocked', {uid: other.user.uid, blocked: true, reason: 'Khóa thử nghiệm'});
     await assert.rejects(other.call('ensureProfile'));
     await boss.call('setPlayerBlocked', {uid: other.user.uid, blocked: false, reason: 'Mở lại thử nghiệm'});

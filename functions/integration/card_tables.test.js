@@ -170,6 +170,12 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     await b.call('leaveCardTable', {tableId: waitingId});
     await assert.rejects(b.call('joinCardTable', {tableId: waitingId}));
     await assert.rejects(a.call('cancelCardTable', {tableId: waitingId, reason: 'Kiểm tra hoàn điểm'}));
+    const beforeTableRefund = (await db.doc(`users/${a.user.uid}`).get()).data().balance;
+    await db.doc(`users/${a.user.uid}`).update({balance: Number.MAX_SAFE_INTEGER});
+    await assert.rejects(boss.call('cancelCardTable', {tableId: waitingId, reason: 'Không thể hoàn điểm tràn số'}));
+    assert.equal((await db.doc(`cardTables/${waitingId}`).get()).data().status, 'waiting');
+    assert.equal((await db.doc(`users/${a.user.uid}/operations/table_refund_${waitingId}`).get()).exists, false);
+    await db.doc(`users/${a.user.uid}`).update({balance: beforeTableRefund});
     await boss.call('cancelCardTable', {tableId: waitingId, reason: 'Kiểm tra hoàn điểm'});
     await boss.call('cancelCardTable', {tableId: waitingId, reason: 'Kiểm tra hoàn điểm'});
     assert.equal(await previous(a.user.uid, b.user.uid), waitingBalances);

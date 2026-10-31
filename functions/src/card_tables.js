@@ -266,6 +266,7 @@ function register({db, call, admin}) {
         const wallets = await Promise.all(data.seats.map((seat) => tx.get(db.doc(`users/${seat.uid}`))));
         data.seats.forEach((seat, i) => {
           const buyIn = data.stake * 10, balance = wallets[i].data().balance + buyIn;
+          if (!Number.isSafeInteger(balance)) error('Số dư vượt giới hạn');
           tx.update(wallets[i].ref, {balance});
           const cycle = config.botUids.includes(seat.uid) ? config.botCycles[seat.uid] : 0;
           walletOp(tx, seat.uid, `table_refund_${ref.id}${cycle > 1 ? `_${cycle}` : ''}`, buyIn, balance, 'table_refund', ref.id);

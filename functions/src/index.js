@@ -159,6 +159,7 @@ exports.cancelRound = call(async (req) => {
     const users = await Promise.all(bets.docs.map((b) => tx.get(db.doc(`users/${b.id}`))));
     bets.docs.forEach((b, i) => {
       const credit = b.data().amount, balance = users[i].data().balance + credit;
+      if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
       tx.update(users[i].ref, {balance});
       tx.update(b.ref, {credit, refunded: true, settledAt: now()});
       tx.create(users[i].ref.collection('operations').doc(`result_${roundId}`), {kind: 'refund', roundId, delta: credit, balance, at: now()});

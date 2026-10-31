@@ -164,3 +164,28 @@ test('reject malformed seats, deck, stake, actions and private hand access', () 
   const small = start(seats(2, 11), 10, deck);
   assert.throws(() => play(small, 'bet'));
 });
+
+test('500 seeded Poker hands: legal bot turns finish and conserve every buy-in', () => {
+  for (let count = 2; count <= 6; count++) for (let hand = 0; hand < 100; hand++) {
+    let seed = 1 + count * 100 + hand;
+    const next = size => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed % size;
+    };
+    const deck = newDeck();
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = next(i + 1);
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    let state = start(seats(count), 10, deck);
+    let turns = 0;
+    while (state.phase !== 'settled' && turns++ < 100) {
+      assert.equal(total(state), count * 100, `count=${count}, hand=${hand}, turn=${turns}`);
+      const uid = state.turnUid;
+      state = act(state, uid, chooseBotAction(state, uid, next), 10);
+    }
+    assert.equal(state.phase, 'settled', `count=${count}, hand=${hand}`);
+    assert.equal(total(state), count * 100, `count=${count}, hand=${hand}`);
+    assert.ok(state.winners.length >= 1);
+  }
+});
