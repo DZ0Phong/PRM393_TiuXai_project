@@ -1,18 +1,18 @@
 'use strict';
-const {Timestamp} = require('firebase-admin/firestore');
+const {Timestamp, FieldValue} = require('firebase-admin/firestore');
+const {randomBytes} = require('node:crypto');
 const {HttpsError} = require('firebase-functions/v2/https');
 const poker = require('./poker_engine');
 const baCay = require('./bacay_engine');
 const engines = {poker, ba_cay: baCay};
 const aliases = ['Mây Xanh', 'Sao Nhỏ', 'Lá Vàng', 'Sóng Biển', 'Nắng Mai'];
-const botIds = aliases.map((_, i) => `bot_${String(i + 1).padStart(2, '0')}`);
 const now = () => Timestamp.now();
 const error = (message) => { throw new HttpsError('failed-precondition', message); };
 const ident = (value) => { if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new HttpsError('invalid-argument', 'ID không hợp lệ'); return value; };
 const why = (value) => { if (typeof value !== 'string' || value.trim().length < 5 || value.length > 300) throw new HttpsError('invalid-argument', 'Lý do phải có 5–300 ký tự'); return value.trim(); };
 const safeGame = (value) => { if (!Object.hasOwn(engines, value)) throw new HttpsError('invalid-argument', 'Trò bài không hợp lệ'); return value; };
-const botSeat = (uid, stake) => ({uid, nickname: aliases[botIds.indexOf(uid)], isBot: true, stack: stake * 10});
-const humanSeat = (uid, stake) => ({uid, nickname: `Bạn ${uid.slice(0, 6)}`, isBot: false, stack: stake * 10});
+const botSeat = (uid, stake, i) => ({uid, nickname: aliases[i % aliases.length], stack: stake * 10});
+const humanSeat = (uid, stake) => ({uid, nickname: `Bạn ${uid.slice(0, 6)}`, stack: stake * 10});
 
 function register({db, call, admin}) {
   const tableRef = (tableId) => db.doc(`cardTables/${ident(tableId)}`);
@@ -22,19 +22,53 @@ function register({db, call, admin}) {
     if (!snap.exists || snap.data().blocked === true) error('Tài khoản không hoạt động');
     if (!Number.isSafeInteger(snap.data().balance) || snap.data().balance < amount) error('Không đủ điểm ảo');
   };
+  // Read legacy tables/secrets too; new writes always keep configuration private.
+  const configuration = (data, hidden) => ({
+    botsEnabled: hidden?.botsEnabled ?? data.botsEnabled ?? false,
+    maxBots: hidden?.maxBots ?? data.maxBots ?? 0,
+    botUids: hidden?.botUids ?? data.seats.filter(s => s.isBot === true).map(s => s.uid),
+  });
+  // Never put bot identities or configuration on the publicly readable table.
+  async function reconcileBots(tx, ref, data, config, enabled, maxBots, humans = data.seats.filter(s => !config.botUids.includes(s.uid))) {
+    const existing = data.seats.filter(s => config.botUids.includes(s.uid));
+    const count = humans.length ? Math.min(enabled ? maxBots : 0, data.maxSeats - humans.length) : 0;
+    const kept = existing.slice(0, count), removed = existing.slice(count);
+    const wallets = await Promise.all(removed.map(s => tx.get(db.doc(`users/${s.uid}`))));
+    const botUids = kept.map(s => s.uid), added = [];
+    for (let i = kept.length; i < count; i++) {
+      const uid = randomBytes(21).toString('base64url');
+      botUids.push(uid); added.push(botSeat(uid, data.stake, i));
+    }
+    const buyIn = data.stake * 10;
+    removed.forEach((seat, i) => {
+      if (!wallets[i].exists) error('Ví bot không còn');
+      const balance = wallets[i].data().balance + buyIn;
+      if (!Number.isSafeInteger(balance)) error('Số dư vượt giới hạn');
+      tx.update(wallets[i].ref, {balance});
+      walletOp(tx, seat.uid, `table_refund_${ref.id}`, buyIn, balance, 'table_refund', ref.id);
+    });
+    for (const seat of added) {
+      const wallet = db.doc(`users/${seat.uid}`);
+      tx.create(wallet, {balance: 10000 - buyIn, isBot: true, nickname: seat.nickname, blocked: false, createdAt: now()});
+      walletOp(tx, seat.uid, 'welcome', 10000, 10000, 'welcome', ref.id);
+      walletOp(tx, seat.uid, `table_join_${ref.id}`, -buyIn, 10000 - buyIn, 'table_join', ref.id);
+    }
+    tx.update(ref, {seats: [...humans, ...kept, ...added], botsEnabled: FieldValue.delete(), maxBots: FieldValue.delete()});
+    return {botsEnabled: enabled, maxBots: enabled ? maxBots : 0, botUids};
+  }
   function view(state, seats) {
     const raw = engines[state.game].publicView(state);
     // Explicit whitelist: a future engine field can never publish a deck or private hand.
     const publicSeats = (raw.seats || state.seats).map((s) => {
       const original = seats.find((seat) => seat.uid === s.uid);
-      return {uid: s.uid, nickname: original.nickname, isBot: original.isBot, stack: s.stack, committed: s.committed || 0, roundBet: s.roundBet || 0, folded: s.folded === true};
+      return {uid: s.uid, nickname: original.nickname, stack: s.stack, committed: s.committed || 0, roundBet: s.roundBet || 0, folded: s.folded === true};
     });
     const winners = (raw.winners || []).map((uid) => ({uid, nickname: seats.find((seat) => seat.uid === uid)?.nickname || uid}));
     return {seats: publicSeats, board: raw.board || [], pot: raw.pot ?? state.pot, street: raw.street || state.street || 'showdown', turnUid: raw.turnUid || null, winners, status: state.phase === 'settled' ? 'settled' : 'playing', turnDeadline: state.phase === 'settled' ? null : Timestamp.fromMillis(Date.now() + 45000)};
   }
-  function botActions(state, seats, stake) {
+  function botActions(state, botUids, stake) {
     let steps = 0;
-    while (state.phase !== 'settled' && botIds.includes(state.turnUid)) {
+    while (state.phase !== 'settled' && botUids.includes(state.turnUid)) {
       if (++steps > 100) error('Vòng bot vượt giới hạn');
       const action = poker.chooseBotAction(state, state.turnUid);
       state = poker.act(state, state.turnUid, action, stake);
@@ -71,113 +105,105 @@ function register({db, call, admin}) {
         assertUser(snap, buyIn);
         const balance = snap.data().balance - buyIn;
         tx.update(user, {balance}); walletOp(tx, uid, `table_join_${ref.id}`, -buyIn, balance, 'table_join', ref.id);
-        tx.create(ref, {game, stake, maxSeats, ownerUid: uid, status: 'waiting', actionVersion: 0, seats: [humanSeat(uid, stake)], botsEnabled: false, maxBots: 0, board: [], pot: 0, createdAt: now()});
+        tx.create(ref, {game, stake, maxSeats, ownerUid: uid, status: 'waiting', actionVersion: 0, seats: [humanSeat(uid, stake)], board: [], pot: 0, createdAt: now()});
+        tx.create(db.doc(`cardSecrets/${ref.id}`), {botsEnabled: false, maxBots: 0, botUids: []});
         audit(tx, uid, 'TABLE_CREATE', {tableId: ref.id, game, stake, buyIn});
       });
       return {tableId: ref.id};
     }),
     joinCardTable: call(async (req) => {
-      const ref = tableRef(req.data?.tableId), uid = req.auth.uid, user = db.doc(`users/${uid}`);
+      const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`);
+      const uid = req.auth.uid, user = db.doc(`users/${uid}`);
       return db.runTransaction(async (tx) => {
-        const [table, wallet, refunded] = await Promise.all([tx.get(ref), tx.get(user), tx.get(user.collection('operations').doc(`table_refund_${ref.id}`))]);
+        const [table, hidden, wallet, refunded] = await Promise.all([tx.get(ref), tx.get(secret), tx.get(user), tx.get(user.collection('operations').doc(`table_refund_${ref.id}`))]);
         if (!table.exists || table.data().status !== 'waiting') error('Bàn không nhận người chơi');
         if (refunded.exists) error('Đã rời bàn; không thể tham gia lại phiên này');
-        const data = table.data(), buyIn = data.stake * 10;
-        if (data.seats.some((s) => s.uid === uid)) return {tableId: ref.id, alreadyJoined: true};
-        if (data.seats.length >= data.maxSeats) error('Bàn đã đủ ghế');
+        const data = table.data(), config = configuration(data, hidden.data());
+        if (data.seats.some(s => s.uid === uid)) return {tableId: ref.id, alreadyJoined: true};
+        const humans = data.seats.filter(s => !config.botUids.includes(s.uid));
+        if (humans.length >= data.maxSeats) error('Bàn đã đủ ghế');
+        const buyIn = data.stake * 10;
         assertUser(wallet, buyIn);
+        const next = await reconcileBots(tx, ref, data, config, config.botsEnabled, config.maxBots, [...humans, humanSeat(uid, data.stake)]);
         const balance = wallet.data().balance - buyIn;
         tx.update(user, {balance}); walletOp(tx, uid, `table_join_${ref.id}`, -buyIn, balance, 'table_join', ref.id);
-        tx.update(ref, {seats: [...data.seats, humanSeat(uid, data.stake)]});
+        tx.set(secret, next, {merge: true});
         audit(tx, uid, 'TABLE_JOIN', {tableId: ref.id, buyIn});
         return {tableId: ref.id};
       });
     }),
     leaveCardTable: call(async (req) => {
-      const ref = tableRef(req.data?.tableId), uid = req.auth.uid, user = db.doc(`users/${uid}`);
+      const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`);
+      const uid = req.auth.uid, user = db.doc(`users/${uid}`);
       return db.runTransaction(async (tx) => {
-        const [table, wallet] = await Promise.all([tx.get(ref), tx.get(user)]);
+        const [table, hidden, wallet] = await Promise.all([tx.get(ref), tx.get(secret), tx.get(user)]);
         if (!table.exists) error('Không có bàn');
-        const data = table.data();
+        const data = table.data(), config = configuration(data, hidden.data());
         if (data.status !== 'waiting') error('Đã bắt đầu; dùng hủy bàn để hoàn điểm');
-        const index = data.seats.findIndex((s) => s.uid === uid);
-        if (index < 0) return {ok: true, alreadyLeft: true};
+        const humans = data.seats.filter(s => !config.botUids.includes(s.uid));
+        if (!humans.some(s => s.uid === uid)) return {ok: true, alreadyLeft: true};
         const buyIn = data.stake * 10, balance = wallet.data().balance + buyIn;
+        if (!Number.isSafeInteger(balance)) error('Số dư vượt giới hạn');
+        const remaining = humans.filter(s => s.uid !== uid);
+        const next = await reconcileBots(tx, ref, data, config, config.botsEnabled, config.maxBots, remaining);
         tx.update(user, {balance}); walletOp(tx, uid, `table_refund_${ref.id}`, buyIn, balance, 'table_refund', ref.id);
-        const seats = data.seats.filter((s) => s.uid !== uid);
-        tx.update(ref, {seats, ownerUid: data.ownerUid === uid ? seats[0]?.uid || null : data.ownerUid, status: seats.length ? 'waiting' : 'cancelled'});
+        tx.update(ref, {ownerUid: data.ownerUid === uid ? remaining[0]?.uid || null : data.ownerUid, status: remaining.length ? 'waiting' : 'cancelled'});
+        tx.set(secret, next, {merge: true});
         audit(tx, uid, 'TABLE_LEAVE', {tableId: ref.id, buyIn});
         return {ok: true};
       });
     }),
     configureCardBots: call(async (req) => {
       admin(req);
-      const ref = tableRef(req.data?.tableId), enabled = req.data?.enabled, maxBots = req.data?.maxBots;
-      if (typeof enabled !== 'boolean' || !Number.isSafeInteger(maxBots) || maxBots < 0 || maxBots > 5) throw new HttpsError('invalid-argument', 'Giới hạn bot không hợp lệ');
-      await db.runTransaction(async (tx) => {
-        const table = await tx.get(ref);
-        if (!table.exists || table.data().status !== 'waiting') error('Chỉ chỉnh bot khi bàn chờ');
-        tx.update(ref, {botsEnabled: enabled, maxBots: enabled ? maxBots : 0});
-        audit(tx, req.auth.uid, 'TABLE_BOT_CONFIG', {tableId: ref.id, enabled, maxBots});
+      const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`);
+      const enabled = req.data?.enabled, maxBots = req.data?.maxBots;
+      if (typeof enabled !== 'boolean' || !Number.isSafeInteger(maxBots) || maxBots < 0 || maxBots > 5)
+        throw new HttpsError('invalid-argument', 'Giới hạn bot không hợp lệ');
+      return db.runTransaction(async (tx) => {
+        const [table, hidden] = await Promise.all([tx.get(ref), tx.get(secret)]);
+        if (!table.exists) error('Không có bàn');
+        const data = table.data(), config = configuration(data, hidden.data());
+        if (data.status !== 'waiting') error('Chỉ chỉnh bot khi bàn chờ');
+        if (maxBots > data.maxSeats - 1) throw new HttpsError('invalid-argument', 'Bot vượt số ghế trống tối đa');
+        const next = await reconcileBots(tx, ref, data, config, enabled, maxBots);
+        tx.set(secret, next, {merge: true});
+        audit(tx, req.auth.uid, 'TABLE_BOT_CONFIG', {tableId: ref.id, enabled, maxBots: next.maxBots});
+        return {ok: true, botsEnabled: enabled, maxBots: next.maxBots};
       });
-      return {ok: true};
+    }),
+    getCardBotConfig: call(async (req) => {
+      admin(req);
+      const ref = tableRef(req.data?.tableId);
+      const [table, hidden] = await Promise.all([ref.get(), db.doc(`cardSecrets/${ref.id}`).get()]);
+      if (!table.exists) error('Không có bàn');
+      const config = configuration(table.data(), hidden.data());
+      return {botsEnabled: config.botsEnabled, maxBots: config.maxBots};
     }),
     startCardHand: call(async (req) => {
       const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`), actor = req.auth.uid;
       return db.runTransaction(async (tx) => {
-        const table = await tx.get(ref);
+        const [table, hidden] = await Promise.all([tx.get(ref), tx.get(secret)]);
         if (!table.exists) error('Không có bàn');
         const data = table.data();
         if (data.ownerUid !== actor && req.auth.token.admin !== true) throw new HttpsError('permission-denied', 'Chỉ chủ bàn hoặc Admin');
         if (['playing', 'settled'].includes(data.status)) return {tableId: ref.id, status: data.status, alreadyStarted: true};
         if (data.status !== 'waiting') error('Bàn không còn chờ');
-        const seats = [...data.seats];
-        if (data.botsEnabled) {
-          const count = Math.min(data.maxBots, data.maxSeats - seats.length);
-          for (const botId of botIds.slice(0, count)) seats.push(botSeat(botId, data.stake));
-        }
+        const seats = data.seats, config = configuration(data, hidden.data());
         if (seats.length < 2 || seats.length > data.maxSeats) error('Cần 2–6 người/bot và còn ghế trống');
         const wallets = new Map();
         for (const seat of seats) wallets.set(seat.uid, await tx.get(db.doc(`users/${seat.uid}`)));
-        // First-time bot wallets are funded once, then every game uses the same debit/credit ledger as players.
-        for (const seat of seats.filter((s) => s.isBot)) {
-          const snap = wallets.get(seat.uid);
-          if (snap.exists) assertUser(snap, data.stake * 10);
-        }
+        for (const seat of seats) if (!wallets.get(seat.uid).exists) error('Ví người chơi không còn');
         let state = engines[data.game].start(seats.map(({uid, stack}) => ({uid, stack})), data.stake);
         state.game = data.game; state.stake = data.stake;
         if (data.game === 'ba_cay') state = baCay.settle(state);
-        else state = botActions(state, seats, data.stake);
+        else state = botActions(state, config.botUids, data.stake);
         state.game = data.game; state.stake = data.stake;
         const publicData = view(state, seats);
-        if (state.phase === 'settled') {
-          if (state.seats.reduce((sum, seat) => sum + seat.stack, 0) !== seats.length * data.stake * 10) error('Bảo toàn điểm thất bại');
-          // Balance computation includes a newly provisioned bot's welcome bankroll and escrow debit.
-          const botSnaps = new Map(wallets);
-          for (const seat of seats.filter((s) => s.isBot && !wallets.get(s.uid).exists)) {
-            const refBot = db.doc(`users/${seat.uid}`);
-            botSnaps.set(seat.uid, {exists: true, ref: refBot, data: () => ({balance: 10000 - data.stake * 10})});
-          }
-          for (const seat of state.seats) {
-            const snap = botSnaps.get(seat.uid), finalBalance = snap.data().balance + seat.stack - (seat.uid.startsWith('bot_') && wallets.get(seat.uid).exists ? data.stake * 10 : 0);
-            if (!Number.isSafeInteger(finalBalance)) error('Số dư vượt giới hạn');
-            if (!wallets.get(seat.uid).exists) tx.create(snap.ref, {balance: finalBalance, isBot: true, nickname: aliases[botIds.indexOf(seat.uid)], blocked: false, createdAt: now()});
-            else tx.update(snap.ref, {balance: finalBalance});
-            walletOp(tx, seat.uid, `table_result_${ref.id}`, seat.stack, finalBalance, 'table_result', ref.id);
-          }
-        }
-        for (const seat of seats.filter((s) => s.isBot)) {
-          const snap = wallets.get(seat.uid), buyIn = data.stake * 10;
-          if (!snap.exists) {
-            if (state.phase !== 'settled') tx.create(snap.ref, {balance: 10000 - buyIn, isBot: true, nickname: aliases[botIds.indexOf(seat.uid)], blocked: false, createdAt: now()});
-            walletOp(tx, seat.uid, 'welcome', 10000, 10000, 'welcome', ref.id);
-          } else if (state.phase !== 'settled') tx.update(snap.ref, {balance: snap.data().balance - buyIn});
-          walletOp(tx, seat.uid, `table_join_${ref.id}`, -buyIn, snap.exists ? snap.data().balance - buyIn : 10000 - buyIn, 'table_join', ref.id);
-        }
-        tx.create(secret, {state});
+        if (state.phase === 'settled') writeSettlement(tx, ref.id, state, wallets);
+        tx.set(secret, {state}, {merge: true});
         for (const seat of seats) tx.create(ref.collection('hands').doc(seat.uid), {cards: engines[data.game].privateHand(state, seat.uid), tableId: ref.id});
-        tx.update(ref, {...publicData, actionVersion: 1, startedAt: now()});
-        audit(tx, actor, 'TABLE_START', {tableId: ref.id, game: data.game, players: seats.map((s) => ({uid: s.uid, isBot: s.isBot})), status: publicData.status});
+        tx.update(ref, {...publicData, botsEnabled: FieldValue.delete(), maxBots: FieldValue.delete(), actionVersion: 1, startedAt: now()});
+        audit(tx, actor, 'TABLE_START', {tableId: ref.id, game: data.game, players: seats.map(s => ({uid: s.uid, isBot: config.botUids.includes(s.uid)})), status: publicData.status});
         return {tableId: ref.id, status: publicData.status};
       });
     }),
@@ -190,12 +216,12 @@ function register({db, call, admin}) {
         if (data.game !== 'poker') error('Ba Cây tự lật bài sau khi đủ ghế');
         if (!Number.isSafeInteger(req.data?.version) || req.data.version !== data.actionVersion) error('Lượt đã thay đổi; tải lại bàn');
         if (data.turnDeadline?.toMillis() <= Date.now()) error('Đã hết thời gian lượt');
-        if (data.turnUid !== uid || !data.seats.some((s) => s.uid === uid && !s.isBot)) throw new HttpsError('permission-denied', 'Chưa tới lượt của bạn');
+        if (data.turnUid !== uid || !data.seats.some(s => s.uid === uid) || configuration(data, hidden.data()).botUids.includes(uid)) throw new HttpsError('permission-denied', 'Chưa tới lượt của bạn');
         const input = req.data?.type;
         if (!['check', 'bet', 'call', 'raise', 'fold'].includes(input)) throw new HttpsError('invalid-argument', 'Hành động không hợp lệ');
         let state = poker.act(hidden.data().state, uid, {type: input}, data.stake);
         if (state.phase === 'showdown') state = poker.settle(state);
-        state = botActions(state, data.seats, data.stake);
+        state = botActions(state, configuration(data, hidden.data()).botUids, data.stake);
         state.game = data.game; state.stake = data.stake;
         let wallets;
         if (state.phase === 'settled') {
@@ -239,12 +265,12 @@ function register({db, call, admin}) {
           const [fresh, hidden] = await Promise.all([tx.get(table.ref), tx.get(secret)]);
           if (!fresh.exists || fresh.data().status !== 'playing' || fresh.data().turnDeadline?.toMillis() > Date.now()) return;
           let state = hidden.data().state;
-          if (botIds.includes(state.turnUid)) state = botActions(state, fresh.data().seats, fresh.data().stake);
+          if (configuration(fresh.data(), hidden.data()).botUids.includes(state.turnUid)) state = botActions(state, configuration(fresh.data(), hidden.data()).botUids, fresh.data().stake);
           else {
             const type = poker.canCheck(state, state.turnUid) ? 'check' : 'fold';
             state = poker.act(state, state.turnUid, {type}, fresh.data().stake);
             if (state.phase === 'showdown') state = poker.settle(state);
-            state = botActions(state, fresh.data().seats, fresh.data().stake);
+            state = botActions(state, configuration(fresh.data(), hidden.data()).botUids, fresh.data().stake);
           }
           state.game = fresh.data().game; state.stake = fresh.data().stake;
           let wallets;

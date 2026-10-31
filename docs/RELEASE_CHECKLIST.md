@@ -21,4 +21,4 @@ node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --
 flutter build apk --debug
 ```
 
-Bản release ký và deploy production **chưa thực hiện**, vì repo không chứa Firebase project thực, credential hay keystore của nhóm. Tạo riêng sau khi nhóm cung cấp thông số và thử nghiệm xong.
+Bản release ký và deploy production **chưa thực hiện**. Firebase CLI máy phát triển phải đăng nhập bằng tài khoản chủ nhóm; chọn đúng Firebase project, xác nhận Blaze/billing trước khi deploy Functions. Không đưa credential, keystore hay service account vào Git. Clone repo chạy được trên Emulator local nhưng chưa tự kết nối production.

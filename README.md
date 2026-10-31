@@ -5,13 +5,13 @@
 ## Hiện trạng (01/11/2026)
 
 - **Chơi được trên Emulator:** Tài/Xỉu, Bầu Cua, Xóc Xóc (ba phòng phiên độc lập). Mỗi phiên 30 giây, một cược/người, 10–1000 điểm, tối đa 100 cược. Admin mở phiên random hoặc chọn kết quả hợp lệ **sau khi khóa cược**; kết quả không sửa lại được. Mọi chọn kết quả, lý do và tác động ví được ghi `auditLogs` **chỉ admin đọc**. `tick` khóa phiên quá hạn và tự chốt random trên Firebase thật; Emulator không tự chạy Scheduler, admin nhấn Khóa/Chốt thủ công.
-- **Poker/Ba Cây chơi được trên Emulator:** bàn 2–6 ghế, mua vào 10× ante (ante 10–100), tham gia bằng mã bàn, chủ bàn bắt đầu khi đủ tối thiểu 2 ghế. Admin cấu hình tối đa 0–5 bot theo sức chứa bàn, hủy/hoàn với lý do. Ba Cây chia ba lá và so 10 điểm ngay; Poker Texas Hold’em ante, cược giới hạn cố định, 4 vòng, một lần raise mỗi vòng, kiểm all-in/side-pot. Mỗi lượt 45 giây; scheduler tự check/fold khi quá hạn, bot dùng cùng engine và ví/ledger. Bài riêng chỉ chủ bài đọc. Bot hiển thị nhãn để lớp nhận biết; không mạo danh bạn học. Một ván/bàn; muốn chơi tiếp tạo bàn mới.
+- **Poker/Ba Cây chơi được trên Emulator:** bàn 2–6 ghế, mua vào 10× ante (ante 10–100), tham gia bằng mã bàn, chủ bàn bắt đầu khi đủ tối thiểu 2 ghế. Admin cấu hình tối đa 0–5 bot theo sức chứa bàn, hủy/hoàn với lý do. Ba Cây chia ba lá và so 10 điểm ngay; Poker Texas Hold’em ante, cược giới hạn cố định, 4 vòng, một lần raise mỗi vòng, kiểm all-in/side-pot. Mỗi lượt 45 giây; scheduler tự check/fold khi quá hạn, bot dùng cùng engine và ví/ledger. Bài riêng chỉ chủ bài đọc. Bot vào ghế đang chờ khi admin bật/điều chỉnh cấu hình; ghế công khai chỉ hiện biệt danh chung, không có nhãn bot. Cấu hình và danh tính bot chỉ admin/server xem được. Không mạo danh bạn học; nhóm giải thích cơ chế trong phần tổng kết. Một ván/bàn; muốn chơi tiếp tạo bàn mới.
 - Email/password, hồ sơ khởi tạo 10.000 điểm một lần, lịch sử ledger, bảng xếp hạng 20 tài khoản bằng biệt danh ngắn (ẩn email/bot), admin điều chỉnh điểm có lý do/requestId, khóa tài khoản. Không còn callable nạp/rút.
 - Backend giới hạn quyền bằng admin custom claim; Firestore client chỉ đọc dữ liệu cho phép, không được ghi. Firestore audit không phải hệ thống chứng cứ bất biến trước chủ Firebase project.
 
 ## Chạy local
 
-Yêu cầu Flutter SDK/Dart >=3.8, Node 22, Java 21 (Java 25 trên máy phát triển đã chạy Emulator), Android SDK. Từ **gốc repo**:
+Yêu cầu Flutter SDK/Dart >=3.8, Node 24 cho CLI/test (Functions deploy dùng runtime Node 22), Java 21 (Java 25 trên máy phát triển đã chạy Emulator), Android SDK. Từ **gốc repo**:
 
 ```powershell
 flutter pub get
@@ -48,7 +48,7 @@ npm.cmd --prefix functions run check
 node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test --test-concurrency=1 functions/integration/emulator.test.js functions/integration/card_tables.test.js"
 ```
 
-CI chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Không có APK release có chữ ký phân phối hay deploy production trong repo. Không đưa `google-services.json`, key ký APK hoặc mật khẩu vào Git.
+CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Clone repo chạy được với Firebase Emulator theo các lệnh trên; chưa phải bản APK cho các máy trong lớp. Chưa có APK release có chữ ký phân phối hay deploy production. Không đưa `google-services.json`, key ký APK hoặc mật khẩu vào Git.
 
 ## Quy tắc và hạn chế
 

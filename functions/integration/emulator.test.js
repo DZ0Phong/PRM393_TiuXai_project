@@ -124,5 +124,14 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     await boss.call('setPlayerBlocked', {uid: other.user.uid, blocked: true, reason: 'Khóa thử nghiệm'});
     await assert.rejects(other.call('ensureProfile'));
     await boss.call('setPlayerBlocked', {uid: other.user.uid, blocked: false, reason: 'Mở lại thử nghiệm'});
+    // Bot accounts can outnumber the old fixed 25-row leaderboard window.
+    const seedBots = db.batch();
+    for (let i = 0; i < 105; i++) {
+      seedBots.set(db.doc(`users/rank_test_bot_${i}`), {balance: 100000 - i, isBot: true});
+    }
+    await seedBots.commit();
+    const ranking = await p.call('getLeaderboard');
+    assert.ok(ranking.some((row) => row.nickname === `Bạn ${p.user.uid.slice(0, 6)}`));
+    assert.ok(ranking.every((row) => row.balance < 100000));
   } finally { await Promise.all(apps.map(deleteApp)); }
 });

@@ -30,10 +30,22 @@ const allowedGame = (value) => {
 
 // Public ranking exposes only a pseudonym and simulated balance, never email or private profile.
 exports.getLeaderboard = call(async () => {
-  // There are at most five internal bots; fetch five extra rows to return 20 humans.
-  const snapshot = await db.collection('users').orderBy('balance', 'desc').limit(25).get();
-  return snapshot.docs.filter((doc) => doc.data().isBot !== true).slice(0, 20)
-    .map((doc, i) => ({rank: i + 1, nickname: `Bạn ${doc.id.slice(0, 6)}`, balance: doc.data().balance}));
+  // Bot wallets may accumulate across tables. Page past them instead of assuming
+  // that the first 25 wallet rows contain 20 human players.
+  const people = [];
+  let cursor = null;
+  for (let page = 0; page < 20 && people.length < 20; page++) {
+    let query = db.collection('users').orderBy('balance', 'desc').limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    people.push(...snapshot.docs.filter((doc) => doc.data().isBot !== true));
+    if (snapshot.size < 100) break;
+    cursor = snapshot.docs.at(-1);
+  }
+  return people.slice(0, 20).map((doc, i) => ({
+    rank: i + 1, nickname: `Bạn ${doc.id.slice(0, 6)}`,
+    balance: doc.data().balance,
+  }));
 });
 
 exports.ensureProfile = call(async (req) => {
@@ -200,5 +212,5 @@ exports.tick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1
   for (const r of random.docs) if (r.data().mode === 'random') await settle(r.id, 'scheduler');
 });
 const cardTables = require('./card_tables').register({db, call, admin});
-for (const name of ['createCardTable', 'joinCardTable', 'leaveCardTable', 'configureCardBots', 'startCardHand', 'cardAction', 'cancelCardTable']) exports[name] = cardTables[name];
+for (const name of ['createCardTable', 'joinCardTable', 'leaveCardTable', 'configureCardBots', 'getCardBotConfig', 'startCardHand', 'cardAction', 'cancelCardTable']) exports[name] = cardTables[name];
 exports.cardTick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1'}, cardTables.tickCardTables);

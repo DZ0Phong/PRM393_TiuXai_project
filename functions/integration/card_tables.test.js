@@ -31,15 +31,67 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     await assert.rejects(a.call('startCardHand', {tableId: baId}));
     await assert.rejects(a.call('configureCardBots', {tableId: baId, enabled: true, maxBots: 1}));
     await boss.call('configureCardBots', {tableId: baId, enabled: true, maxBots: 1});
+    const waitingBa = (await db.doc(`cardTables/${baId}`).get()).data();
+    const baBot = waitingBa.seats.find(s => s.uid !== a.user.uid).uid;
+    assert.equal(waitingBa.seats.length, 2);
+    assert.match(baBot, /^[A-Za-z0-9_-]{28}$/);
+    assert.ok(!baBot.startsWith('bot_'));
+    assert.ok(!Object.hasOwn(waitingBa, 'botsEnabled') && !Object.hasOwn(waitingBa, 'maxBots'));
+    assert.ok(waitingBa.seats.every(s => !Object.hasOwn(s, 'isBot')));
+    const getBotConfig = register({db, call: fn => fn, admin: req => {
+      if (req.auth.token.admin !== true) throw Error('admin only');
+    }}).getCardBotConfig;
+    assert.deepEqual(await getBotConfig({data: {tableId: baId}, auth: {uid: boss.user.uid, token: {admin: true}}}),
+      {botsEnabled: true, maxBots: 1});
+    await assert.rejects(getBotConfig({data: {tableId: baId}, auth: {uid: a.user.uid, token: {}}}));
+    assert.deepEqual(await boss.call('getCardBotConfig', {tableId: baId}), {botsEnabled: true, maxBots: 1});
+    await assert.rejects(a.call('getCardBotConfig', {tableId: baId}));
+    await assert.rejects(boss.call('configureCardBots', {tableId: baId}));
     await a.call('startCardHand', {tableId: baId});
     await a.call('startCardHand', {tableId: baId});
     const ba = (await db.doc(`cardTables/${baId}`).get()).data();
     assert.equal(ba.status, 'settled'); assert.equal(ba.seats.length, 2);
-    assert.equal(ba.seats.filter(s => s.isBot).length, 1);
+    assert.ok(ba.seats.every(s => !Object.hasOwn(s, 'isBot')));
     assert.equal(ba.hands, undefined);
     assert.equal((await db.doc(`cardTables/${baId}/hands/${a.user.uid}`).get()).data().cards.length, 3);
-    assert.equal((await db.doc(`users/${a.user.uid}`).get()).data().balance + (await db.doc('users/bot_01').get()).data().balance, 20000);
+    assert.equal((await db.doc(`users/${a.user.uid}`).get()).data().balance + (await db.doc(`users/${baBot}`).get()).data().balance, 20000);
     await assert.rejects(b.call('cardAction', {tableId: baId, type: 'bet', version: 1}));
+    const {tableId: changingId} = await a.call('createCardTable', {game: 'poker', stake: 10, maxSeats: 3, requestId: 'bot-waiting-001'});
+    await assert.rejects(b.call('configureCardBots', {tableId: changingId, enabled: true, maxBots: 2}));
+    await assert.rejects(boss.call('configureCardBots', {tableId: changingId, enabled: true, maxBots: 3}));
+    const parallel = await Promise.allSettled([1, 2].map(() => boss.call('configureCardBots', {tableId: changingId, enabled: true, maxBots: 2})));
+    assert.ok(parallel.every(p => p.status === 'fulfilled'));
+    let waiting = (await db.doc(`cardTables/${changingId}`).get()).data();
+    assert.equal(waiting.seats.length, 3);
+    const originalBots = waiting.seats.filter(s => s.uid !== a.user.uid).map(s => s.uid);
+    for (const uid of originalBots) assert.equal((await db.doc(`users/${uid}/operations/table_join_${changingId}`).get()).data().delta, -100);
+    await b.call('joinCardTable', {tableId: changingId});
+    waiting = (await db.doc(`cardTables/${changingId}`).get()).data();
+    assert.equal(waiting.seats.length, 3);
+    assert.ok(waiting.seats.some(s => s.uid === b.user.uid));
+    const evicted = originalBots.find(uid => !waiting.seats.some(s => s.uid === uid));
+    assert.equal((await db.doc(`users/${evicted}/operations/table_refund_${changingId}`).get()).data().delta, 100);
+    await b.call('leaveCardTable', {tableId: changingId});
+    waiting = (await db.doc(`cardTables/${changingId}`).get()).data();
+    assert.equal(waiting.seats.length, 3);
+    await boss.call('configureCardBots', {tableId: changingId, enabled: false, maxBots: 0});
+    waiting = (await db.doc(`cardTables/${changingId}`).get()).data();
+    assert.equal(waiting.seats.length, 1);
+    assert.ok(!Object.hasOwn(waiting, 'botsEnabled') && !Object.hasOwn(waiting, 'maxBots'));
+    for (const uid of waiting.seats.map(s => s.uid)) assert.equal(uid, a.user.uid);
+    await boss.call('cancelCardTable', {tableId: changingId, reason: 'Dọn bàn test'});
+    const {tableId: soloId} = await a.call('createCardTable', {game: 'ba_cay', stake: 10, maxSeats: 6, requestId: 'bot-owner-leave-001'});
+    await boss.call('configureCardBots', {tableId: soloId, enabled: true, maxBots: 5});
+    const soloBots = (await db.doc(`cardTables/${soloId}`).get()).data().seats.filter(s => s.uid !== a.user.uid);
+    assert.equal(soloBots.length, 5);
+    await a.call('leaveCardTable', {tableId: soloId});
+    await assert.rejects(a.call('leaveCardTable', {tableId: soloId}));
+    const solo = (await db.doc(`cardTables/${soloId}`).get()).data();
+    assert.equal(solo.status, 'cancelled'); assert.equal(solo.seats.length, 0);
+    for (const seat of soloBots) {
+      assert.equal((await db.doc(`users/${seat.uid}`).get()).data().balance, 10000);
+      assert.equal((await db.doc(`users/${seat.uid}/operations/table_refund_${soloId}`).get()).data().delta, 100);
+    }
     const pokerReq = {game: 'poker', stake: 50, maxSeats: 6, requestId: 'poker-create-001'};
     const {tableId: id} = await a.call('createCardTable', pokerReq);
     await b.call('joinCardTable', {tableId: id}); await b.call('joinCardTable', {tableId: id});
@@ -69,8 +121,9 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
       botTable = (await db.doc(`cardTables/${botPoker}`).get()).data();
     }
     assert.equal(botTable.status, 'settled');
-    const balance = (await db.doc(`users/${c.user.uid}`).get()).data().balance + (await db.doc('users/bot_01').get()).data().balance;
-    assert.equal(balance, 10000 + (await db.doc('users/bot_01/operations/table_result_' + baId).get()).data().balance);
+    const pokerBot = botTable.seats.find(s => s.uid !== c.user.uid).uid;
+    assert.notEqual(pokerBot, baBot);
+    assert.equal((await db.doc(`users/${pokerBot}/operations/table_join_${botPoker}`).get()).data().delta, -100);
 
     const previous = async (...ids) => (await Promise.all(ids.map(uid => db.doc(`users/${uid}`).get())))
       .reduce((sum, snap) => sum + snap.data().balance, 0);
@@ -88,7 +141,7 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     assert.equal(await previous(a.user.uid, b.user.uid), waitingBalances);
     assert.equal((await db.doc(`users/${a.user.uid}/operations/table_refund_${waitingId}`).get()).data().delta, 100);
 
-    const beforeMultiBot = await previous(c.user.uid, 'bot_01') + 10000; // bot_02 not provisioned yet
+    const beforeMultiBot = await previous(c.user.uid) + 20000;
     const {tableId: multiId} = await c.call('createCardTable',
       {game: 'ba_cay', stake: 10, maxSeats: 4, requestId: 'two-bots-001'});
     await boss.call('configureCardBots', {tableId: multiId, enabled: true, maxBots: 2});
@@ -96,8 +149,10 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     const multi = (await db.doc(`cardTables/${multiId}`).get()).data();
     assert.equal(multi.status, 'settled');
     assert.equal(multi.seats.length, 3);
-    assert.equal(multi.seats.filter(s => s.isBot).length, 2);
-    assert.equal(await previous(c.user.uid, 'bot_01', 'bot_02'), beforeMultiBot);
+    assert.ok(multi.seats.every(s => !Object.hasOwn(s, 'isBot')));
+    const multiBots = multi.seats.filter(s => s.uid !== c.user.uid).map(s => s.uid);
+    assert.equal(multiBots.length, 2);
+    assert.equal(await previous(c.user.uid, ...multiBots), beforeMultiBot);
     const ranking = await b.call('getLeaderboard');
     assert.equal(ranking.length, 4);
     assert.ok(ranking.every(row => row.nickname.startsWith('Bạn ') && Number.isSafeInteger(row.balance)));

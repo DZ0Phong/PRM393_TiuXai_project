@@ -38,6 +38,8 @@ class _CardTableScreenState extends State<CardTableScreen> {
   bool _busy = false;
   bool _botsEnabled = false;
   int _maxBots = 1;
+  bool _botConfigLoaded = false;
+  String? _botConfigError;
   int _maxSeats = 2;
   Map<String, dynamic>? _pendingCreate;
   bool _pendingLoaded = false;
@@ -130,7 +132,37 @@ class _CardTableScreenState extends State<CardTableScreen> {
         .snapshots(includeMetadataChanges: true);
     _botsEnabled = false;
     _maxBots = 1;
+    _botConfigLoaded = false;
+    _botConfigError = null;
     _reason.clear();
+    if (widget.isAdmin) _loadBotConfig(id);
+  }
+
+  Future<void> _loadBotConfig(String tableId) async {
+    try {
+      final response = await _functions.httpsCallable('getCardBotConfig').call({
+        'tableId': tableId,
+      });
+      if (!mounted || _tableId != tableId) return;
+      final config = response.data;
+      if (config is! Map ||
+          config['maxBots'] is! int ||
+          config['botsEnabled'] is! bool) {
+        throw const FormatException('Cấu hình bot không hợp lệ.');
+      }
+      setState(() {
+        _botsEnabled = config['botsEnabled'] as bool;
+        _maxBots = config['maxBots'] as int;
+        _botConfigLoaded = true;
+        _botConfigError = null;
+      });
+    } catch (error) {
+      if (!mounted || _tableId != tableId) return;
+      setState(() {
+        _botConfigLoaded = false;
+        _botConfigError = _errorText(error);
+      });
+    }
   }
 
   bool _validId(String id) => RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id);
@@ -539,11 +571,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
           for (final seat in seats)
             ListTile(
               dense: true,
-              leading: Icon(
-                seat['isBot'] == true
-                    ? Icons.smart_toy_outlined
-                    : Icons.person_outline,
-              ),
+              leading: Icon(Icons.person_outline),
               title: Text('${seat['nickname'] ?? seat['uid'] ?? 'Ghế trống'}'),
               subtitle: Text(
                 '${seat['stack'] ?? '—'} xu ảo'
@@ -581,7 +609,9 @@ class _CardTableScreenState extends State<CardTableScreen> {
             ),
           if (widget.isAdmin && waiting) ...[
             Text(
-              'Đang lưu: ${table['botsEnabled'] == true ? 'bật' : 'tắt'} bot • tối đa ${table['maxBots'] ?? 0}',
+              _botConfigLoaded
+                  ? 'Cấu hình riêng của admin đã tải.'
+                  : 'Đang tải cấu hình bot riêng của admin…',
             ),
             _botControls(id, maxSeats, canAct),
           ],
@@ -680,6 +710,13 @@ class _CardTableScreenState extends State<CardTableScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Admin • Bot', style: Theme.of(context).textTheme.titleMedium),
+          if (_botConfigError != null) ...[
+            Text(_botConfigError!),
+            TextButton(
+              onPressed: () => _loadBotConfig(id),
+              child: const Text('Tải lại cấu hình'),
+            ),
+          ],
           SwitchListTile(
             title: const Text('Bật bot'),
             value: _botsEnabled,
@@ -689,6 +726,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
           ),
           DropdownButtonFormField<int>(
             // Clamp local draft if a different table has fewer seats.
+            key: ValueKey('bot_count_${id}_$_maxBots'),
             initialValue: _maxBots.clamp(0, maxSeats > 1 ? maxSeats - 1 : 1),
             decoration: const InputDecoration(labelText: 'Số bot tối đa'),
             items: [
@@ -700,14 +738,14 @@ class _CardTableScreenState extends State<CardTableScreen> {
                 : null,
           ),
           FilledButton.tonal(
-            onPressed: canAct
+            onPressed: canAct && _botConfigLoaded
                 ? () => _call('configureCardBots', {
                     'tableId': id,
                     'enabled': _botsEnabled,
                     'maxBots': _botsEnabled
                         ? _maxBots.clamp(0, maxSeats - 1)
                         : 0,
-                  })
+                  }, onSuccess: (_) => _loadBotConfig(id))
                 : null,
             child: const Text('Lưu cấu hình bot'),
           ),
