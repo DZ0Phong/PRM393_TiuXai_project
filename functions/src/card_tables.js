@@ -5,13 +5,11 @@ const {HttpsError} = require('firebase-functions/v2/https');
 const poker = require('./poker_engine');
 const baCay = require('./bacay_engine');
 const engines = {poker, ba_cay: baCay};
-const aliases = ['Mây Xanh', 'Sao Nhỏ', 'Lá Vàng', 'Sóng Biển', 'Nắng Mai'];
 const now = () => Timestamp.now();
 const error = (message) => { throw new HttpsError('failed-precondition', message); };
 const ident = (value) => { if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new HttpsError('invalid-argument', 'ID không hợp lệ'); return value; };
 const why = (value) => { if (typeof value !== 'string' || value.trim().length < 5 || value.length > 300) throw new HttpsError('invalid-argument', 'Lý do phải có 5–300 ký tự'); return value.trim(); };
 const safeGame = (value) => { if (!Object.hasOwn(engines, value)) throw new HttpsError('invalid-argument', 'Trò bài không hợp lệ'); return value; };
-const botSeat = (uid, stake, i) => ({uid, nickname: aliases[i % aliases.length], stack: stake * 10});
 const humanSeat = (uid, stake) => ({uid, nickname: `Bạn ${uid.slice(0, 6)}`, stack: stake * 10});
 
 function register({db, call, admin}) {
@@ -46,7 +44,7 @@ function register({db, call, admin}) {
     for (let i = kept.length; i < count; i++) {
       const uid = pool.find(id => !botUids.includes(id));
       if (!uid) error('Không còn bot');
-      botUids.push(uid); added.push(botSeat(uid, data.stake, pool.indexOf(uid)));
+      botUids.push(uid); added.push(humanSeat(uid, data.stake));
     }
     const wallets = new Map();
     for (const seat of [...removed, ...added]) wallets.set(seat.uid, await tx.get(db.doc(`users/${seat.uid}`)));

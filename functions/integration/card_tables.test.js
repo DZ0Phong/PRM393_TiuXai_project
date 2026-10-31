@@ -39,6 +39,8 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     const poolIds = (await db.doc('cardBotPool/global').get()).data().uids;
     assert.equal(poolIds.length, 5);
     assert.equal(baBot, poolIds[0]);
+    assert.equal(waitingBa.seats.find(s => s.uid === baBot).nickname, `Bạn ${baBot.slice(0, 6)}`);
+    assert.equal(waitingBa.seats.find(s => s.uid === a.user.uid).nickname, `Bạn ${a.user.uid.slice(0, 6)}`);
     assert.ok(!Object.hasOwn(waitingBa, 'botsEnabled') && !Object.hasOwn(waitingBa, 'maxBots'));
     assert.ok(waitingBa.seats.every(s => !Object.hasOwn(s, 'isBot')));
     const getBotConfig = register({db, call: fn => fn, admin: req => {
