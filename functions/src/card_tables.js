@@ -27,34 +27,55 @@ function register({db, call, admin}) {
     botsEnabled: hidden?.botsEnabled ?? data.botsEnabled ?? false,
     maxBots: hidden?.maxBots ?? data.maxBots ?? 0,
     botUids: hidden?.botUids ?? data.seats.filter(s => s.isBot === true).map(s => s.uid),
+    botCycles: hidden?.botCycles ?? {},
   });
-  // Never put bot identities or configuration on the publicly readable table.
+  // Pool and per-table join cycles are private; the public table carries only opaque seat UIDs.
   async function reconcileBots(tx, ref, data, config, enabled, maxBots, humans = data.seats.filter(s => !config.botUids.includes(s.uid))) {
     const existing = data.seats.filter(s => config.botUids.includes(s.uid));
     const count = humans.length ? Math.min(enabled ? maxBots : 0, data.maxSeats - humans.length) : 0;
     const kept = existing.slice(0, count), removed = existing.slice(count);
-    const wallets = await Promise.all(removed.map(s => tx.get(db.doc(`users/${s.uid}`))));
-    const botUids = kept.map(s => s.uid), added = [];
-    for (let i = kept.length; i < count; i++) {
-      const uid = randomBytes(21).toString('base64url');
-      botUids.push(uid); added.push(botSeat(uid, data.stake, i));
+    const poolRef = db.doc('cardBotPool/global');
+    let pool, createPool = false;
+    if (count > kept.length) {
+      const poolSnap = await tx.get(poolRef);
+      pool = poolSnap.exists ? poolSnap.data().uids : Array.from({length: 5}, () => randomBytes(21).toString('base64url'));
+      if (!Array.isArray(pool) || pool.length !== 5 || new Set(pool).size !== 5) error('Pool bot không hợp lệ');
+      createPool = !poolSnap.exists;
     }
+    const botUids = kept.map(s => s.uid), botCycles = {...config.botCycles}, added = [];
+    for (let i = kept.length; i < count; i++) {
+      const uid = pool.find(id => !botUids.includes(id));
+      if (!uid) error('Không còn bot');
+      botUids.push(uid); added.push(botSeat(uid, data.stake, pool.indexOf(uid)));
+    }
+    const wallets = new Map();
+    for (const seat of [...removed, ...added]) wallets.set(seat.uid, await tx.get(db.doc(`users/${seat.uid}`)));
     const buyIn = data.stake * 10;
-    removed.forEach((seat, i) => {
-      if (!wallets[i].exists) error('Ví bot không còn');
-      const balance = wallets[i].data().balance + buyIn;
+    if (createPool) tx.create(poolRef, {uids: pool, createdAt: now()});
+    for (const seat of removed) {
+      const snap = wallets.get(seat.uid);
+      if (!snap.exists || snap.data().isBot !== true) error('Ví bot không còn');
+      const balance = snap.data().balance + buyIn;
       if (!Number.isSafeInteger(balance)) error('Số dư vượt giới hạn');
-      tx.update(wallets[i].ref, {balance});
-      walletOp(tx, seat.uid, `table_refund_${ref.id}`, buyIn, balance, 'table_refund', ref.id);
-    });
+      tx.update(snap.ref, {balance});
+      walletOp(tx, seat.uid, `table_refund_${ref.id}${botCycles[seat.uid] > 1 ? `_${botCycles[seat.uid]}` : ''}`, buyIn, balance, 'table_refund', ref.id);
+    }
     for (const seat of added) {
-      const wallet = db.doc(`users/${seat.uid}`);
-      tx.create(wallet, {balance: 10000 - buyIn, isBot: true, nickname: seat.nickname, blocked: false, createdAt: now()});
-      walletOp(tx, seat.uid, 'welcome', 10000, 10000, 'welcome', ref.id);
-      walletOp(tx, seat.uid, `table_join_${ref.id}`, -buyIn, 10000 - buyIn, 'table_join', ref.id);
+      const snap = wallets.get(seat.uid), balance = snap.exists ? snap.data().balance : 10000;
+      if (snap.exists) {
+        if (snap.data().isBot !== true) error('Ví bot không hợp lệ');
+        assertUser(snap, buyIn);
+        tx.update(snap.ref, {balance: balance - buyIn});
+      } else {
+        tx.create(snap.ref, {balance: balance - buyIn, isBot: true, nickname: seat.nickname, blocked: false, createdAt: now()});
+        walletOp(tx, seat.uid, 'welcome', 10000, 10000, 'welcome', ref.id);
+      }
+      const cycle = (botCycles[seat.uid] || 0) + 1;
+      botCycles[seat.uid] = cycle;
+      walletOp(tx, seat.uid, `table_join_${ref.id}${cycle > 1 ? `_${cycle}` : ''}`, -buyIn, balance - buyIn, 'table_join', ref.id);
     }
     tx.update(ref, {seats: [...humans, ...kept, ...added], botsEnabled: FieldValue.delete(), maxBots: FieldValue.delete()});
-    return {botsEnabled: enabled, maxBots: enabled ? maxBots : 0, botUids};
+    return {botsEnabled: enabled, maxBots: enabled ? maxBots : 0, botUids, botCycles};
   }
   function view(state, seats) {
     const raw = engines[state.game].publicView(state);
@@ -106,7 +127,7 @@ function register({db, call, admin}) {
         const balance = snap.data().balance - buyIn;
         tx.update(user, {balance}); walletOp(tx, uid, `table_join_${ref.id}`, -buyIn, balance, 'table_join', ref.id);
         tx.create(ref, {game, stake, maxSeats, ownerUid: uid, status: 'waiting', actionVersion: 0, seats: [humanSeat(uid, stake)], board: [], pot: 0, createdAt: now()});
-        tx.create(db.doc(`cardSecrets/${ref.id}`), {botsEnabled: false, maxBots: 0, botUids: []});
+        tx.create(db.doc(`cardSecrets/${ref.id}`), {botsEnabled: false, maxBots: 0, botUids: [], botCycles: {}});
         audit(tx, uid, 'TABLE_CREATE', {tableId: ref.id, game, stake, buyIn});
       });
       return {tableId: ref.id};
@@ -127,7 +148,7 @@ function register({db, call, admin}) {
         const next = await reconcileBots(tx, ref, data, config, config.botsEnabled, config.maxBots, [...humans, humanSeat(uid, data.stake)]);
         const balance = wallet.data().balance - buyIn;
         tx.update(user, {balance}); walletOp(tx, uid, `table_join_${ref.id}`, -buyIn, balance, 'table_join', ref.id);
-        tx.set(secret, next, {merge: true});
+        tx.set(secret, next);
         audit(tx, uid, 'TABLE_JOIN', {tableId: ref.id, buyIn});
         return {tableId: ref.id};
       });
@@ -148,7 +169,7 @@ function register({db, call, admin}) {
         const next = await reconcileBots(tx, ref, data, config, config.botsEnabled, config.maxBots, remaining);
         tx.update(user, {balance}); walletOp(tx, uid, `table_refund_${ref.id}`, buyIn, balance, 'table_refund', ref.id);
         tx.update(ref, {ownerUid: data.ownerUid === uid ? remaining[0]?.uid || null : data.ownerUid, status: remaining.length ? 'waiting' : 'cancelled'});
-        tx.set(secret, next, {merge: true});
+        tx.set(secret, next);
         audit(tx, uid, 'TABLE_LEAVE', {tableId: ref.id, buyIn});
         return {ok: true};
       });
@@ -166,7 +187,7 @@ function register({db, call, admin}) {
         if (data.status !== 'waiting') error('Chỉ chỉnh bot khi bàn chờ');
         if (maxBots > data.maxSeats - 1) throw new HttpsError('invalid-argument', 'Bot vượt số ghế trống tối đa');
         const next = await reconcileBots(tx, ref, data, config, enabled, maxBots);
-        tx.set(secret, next, {merge: true});
+        tx.set(secret, next);
         audit(tx, req.auth.uid, 'TABLE_BOT_CONFIG', {tableId: ref.id, enabled, maxBots: next.maxBots});
         return {ok: true, botsEnabled: enabled, maxBots: next.maxBots};
       });
@@ -237,18 +258,19 @@ function register({db, call, admin}) {
     }),
     cancelCardTable: call(async (req) => {
       admin(req);
-      const ref = tableRef(req.data?.tableId), reason = why(req.data?.reason);
+      const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`), reason = why(req.data?.reason);
       return db.runTransaction(async (tx) => {
-        const table = await tx.get(ref);
+        const [table, hidden] = await Promise.all([tx.get(ref), tx.get(secret)]);
         if (!table.exists) error('Không có bàn');
-        const data = table.data();
+        const data = table.data(), config = configuration(data, hidden.data());
         if (data.status === 'cancelled') return {ok: true, alreadyCancelled: true};
         if (data.status === 'settled') error('Không thể hủy đã chốt');
         const wallets = await Promise.all(data.seats.map((seat) => tx.get(db.doc(`users/${seat.uid}`))));
         data.seats.forEach((seat, i) => {
           const buyIn = data.stake * 10, balance = wallets[i].data().balance + buyIn;
           tx.update(wallets[i].ref, {balance});
-          walletOp(tx, seat.uid, `table_refund_${ref.id}`, buyIn, balance, 'table_refund', ref.id);
+          const cycle = config.botUids.includes(seat.uid) ? config.botCycles[seat.uid] : 0;
+          walletOp(tx, seat.uid, `table_refund_${ref.id}${cycle > 1 ? `_${cycle}` : ''}`, buyIn, balance, 'table_refund', ref.id);
         });
         tx.update(ref, {status: 'cancelled', cancelledAt: now(), turnUid: null});
         audit(tx, req.auth.uid, 'TABLE_CANCEL', {tableId: ref.id, reason, refundedPlayers: data.seats.length});
