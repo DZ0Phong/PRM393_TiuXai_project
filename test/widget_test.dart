@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tai_xiu_realtime/features/game/game_specs.dart';
 import 'package:tai_xiu_realtime/features/admin/admin_console.dart';
@@ -13,7 +15,12 @@ void main() {
 
   test('Debug mặc định dùng emulator', () {
     expect(emulator, isTrue);
-    expect(host, '127.0.0.1');
+    expect(
+      host,
+      defaultTargetPlatform == TargetPlatform.android
+          ? '10.0.2.2'
+          : '127.0.0.1',
+    );
   });
 
   test('Ba phòng chơi riêng, kết quả quản trị được kiểm tra theo game', () {

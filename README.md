@@ -22,10 +22,10 @@ node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:start -
 Mở terminal khác:
 
 ```powershell
-flutter run -d <android-device-id> --dart-define=EMULATOR_HOST=10.0.2.2
+flutter run -d <android-device-id>
 ```
 
-Android Emulator truy cập host qua `10.0.2.2`; thiết bị thật cần IP LAN máy chạy Emulator và kết nối cùng mạng. Không mở public Emulator. Có thể dùng `flutter run -d chrome` trên cùng máy với host mặc định `127.0.0.1`. Debug mặc định dùng Emulator; release mặc định **không** dùng Emulator. Cấu hình Firebase thật qua các `--dart-define` tên `FIREBASE_*` trong `lib/main.dart`; không commit secret/service account. Dự án Firebase thật cần bật Email/Password, Firestore, Functions, thiết lập claim admin, kiểm App Check và billing trước demo.
+Android Emulator mặc định truy cập host qua `10.0.2.2`; thiết bị thật cần `--dart-define=EMULATOR_HOST=<IP-LAN>` và kết nối cùng mạng. Không mở public Emulator. Có thể dùng `flutter run -d chrome` trên cùng máy với host mặc định `127.0.0.1`. Debug mặc định dùng Emulator với API key giả có định dạng hợp lệ cho Android (không có quyền truy cập project thật); release mặc định **không** dùng Emulator và từ chối chạy nếu vẫn là project demo. Cấu hình Firebase thật qua các `--dart-define` tên `FIREBASE_*` trong `lib/main.dart`; không commit secret/service account. Dự án Firebase thật cần bật Email/Password, Firestore, Functions, thiết lập claim admin, kiểm App Check và billing trước demo.
 
 Tạo user bằng form đăng ký. Cấp quyền admin **chỉ cho UID tin cậy** (Emulator):
 

@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'features/admin/admin_console.dart';
@@ -13,17 +14,30 @@ import 'features/game/game_specs.dart';
 import 'features/game/round_bets.dart';
 
 const emulator = bool.fromEnvironment('EMULATORS', defaultValue: kDebugMode);
-const host = String.fromEnvironment('EMULATOR_HOST', defaultValue: '127.0.0.1');
+const configuredHost = String.fromEnvironment('EMULATOR_HOST');
+final host = configuredHost.isNotEmpty
+    ? configuredHost
+    : defaultTargetPlatform == TargetPlatform.android
+    ? '10.0.2.2'
+    : '127.0.0.1';
 final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    if (!emulator &&
+        const String.fromEnvironment(
+              'FIREBASE_PROJECT_ID',
+              defaultValue: 'demo-tai-xiu',
+            ) ==
+            'demo-tai-xiu') {
+      throw StateError('Chưa cấu hình Firebase project thật cho bản release.');
+    }
     await Firebase.initializeApp(
       options: const FirebaseOptions(
         apiKey: String.fromEnvironment(
           'FIREBASE_API_KEY',
-          defaultValue: 'demo-key',
+          defaultValue: 'AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         ),
         appId: String.fromEnvironment(
           'FIREBASE_APP_ID',
