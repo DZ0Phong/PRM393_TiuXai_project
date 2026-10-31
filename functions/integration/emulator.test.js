@@ -21,6 +21,9 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
       await setDoc(doc(c.firestore(), 'rounds/rule-test'), {status: 'open'});
       await setDoc(doc(c.firestore(), 'rounds/rule-test/bets/alice'), {amount: 10});
       await setDoc(doc(c.firestore(), 'auditLogs/test'), {action: 'TEST'});
+      await setDoc(doc(c.firestore(), 'cardTables/card-test'), {game: 'poker', status: 'playing'});
+      await setDoc(doc(c.firestore(), 'cardTables/card-test/hands/alice'), {cards: ['AS', 'AH']});
+      await setDoc(doc(c.firestore(), 'cardSecrets/card-test'), {state: {hands: {alice: ['AS', 'AH']}}});
     });
     const alice = env.authenticatedContext('alice').firestore();
     const bob = env.authenticatedContext('bob').firestore();
@@ -35,6 +38,12 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
     await assertSucceeds(getDoc(doc(admin, 'auditLogs/test')));
     await assertFails(getDoc(doc(anon, 'auditLogs/test')));
     await assertFails(getDoc(doc(bob, 'rounds/rule-test/bets/alice')));
+    await assertSucceeds(getDoc(doc(bob, 'cardTables/card-test')));
+    await assertSucceeds(getDoc(doc(alice, 'cardTables/card-test/hands/alice')));
+    await assertFails(getDoc(doc(bob, 'cardTables/card-test/hands/alice')));
+    await assertFails(getDoc(doc(admin, 'cardTables/card-test/hands/alice')));
+    await assertFails(getDoc(doc(alice, 'cardSecrets/card-test')));
+    await assertFails(getDoc(doc(admin, 'cardSecrets/card-test')));
     await assertSucceeds(getDoc(doc(alice, 'rounds/rule-test/bets/alice')));
     await assertFails(getDoc(doc(env.authenticatedContext('locked').firestore(), 'rounds/rule-test')));
   } finally { await env.cleanup(); }

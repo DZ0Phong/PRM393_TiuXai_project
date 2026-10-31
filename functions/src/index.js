@@ -28,6 +28,14 @@ const allowedGame = (value) => {
   return value;
 };
 
+// Public ranking exposes only a pseudonym and simulated balance, never email or private profile.
+exports.getLeaderboard = call(async () => {
+  // There are at most five internal bots; fetch five extra rows to return 20 humans.
+  const snapshot = await db.collection('users').orderBy('balance', 'desc').limit(25).get();
+  return snapshot.docs.filter((doc) => doc.data().isBot !== true).slice(0, 20)
+    .map((doc, i) => ({rank: i + 1, nickname: `Bạn ${doc.id.slice(0, 6)}`, balance: doc.data().balance}));
+});
+
 exports.ensureProfile = call(async (req) => {
   const ref = db.doc(`users/${req.auth.uid}`);
   await db.runTransaction(async (tx) => {
@@ -191,3 +199,6 @@ exports.tick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1
   const random = await db.collection('rounds').where('status', '==', 'locked').get();
   for (const r of random.docs) if (r.data().mode === 'random') await settle(r.id, 'scheduler');
 });
+const cardTables = require('./card_tables').register({db, call, admin});
+for (const name of ['createCardTable', 'joinCardTable', 'leaveCardTable', 'configureCardBots', 'startCardHand', 'cardAction', 'cancelCardTable']) exports[name] = cardTables[name];
+exports.cardTick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1'}, cardTables.tickCardTables);

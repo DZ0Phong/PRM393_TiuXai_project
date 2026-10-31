@@ -8,9 +8,11 @@ Flutter → Firebase Auth → Functions callable (`asia-southeast1`) → Firesto
 
 `users/{uid}` có balance nguyên; `operations/welcome`, `bet_<roundId>`, `result_<roundId>`, `admin_<requestId>` lưu delta/balance. Chốt/hủy đọc round, bets, users trước write trong transaction, ghi tất cả atomically. Retry settled/cancelled không trả thêm. Admin adjustment cũng idempotent theo requestId và payload. Không có endpoint nạp/rút. Audit chỉ admin đọc; chủ project có toàn quyền admin SDK nên không phải log WORM.
 
-## Poker/Ba Cây còn thiếu
+## Bàn Poker/Ba Cây
 
-Module luật thuần dùng để kiểm thử xếp bài, chưa có server-authoritative table engine, dữ liệu lá bài riêng, phòng 2–6 ghế, timeout, bot, matchmaking hay ứng dụng player cho hai trò. Không tạo dữ liệu bài giả mạo. Thiết kế mốc tiếp: bàn `waiting → dealing → betting → showdown → settled`, state/private card theo UID, bot service identity nội bộ và audit config. Cần kiểm tra all-in/side-pot, thứ tự turn, fold, leave/disconnect, timer retry, fairness trước khi mở trò.
+`cardTables/{uid_requestId}` là bản công khai chỉ chứa ghế, số điểm, vòng, bài chung và kết quả; `cardTables/{id}/hands/{uid}` chỉ UID đó đọc; `cardSecrets/{id}` chứa state, bộ bài và bài của mọi người, Firestore rules không cho client đọc/ghi. Functions tạo/tham gia giữ mua vào `10×ante` trong ví, tạo `operations/table_join_*`; mã bàn cũng là mã mời. Chủ bàn hoặc admin bắt đầu sau khi có 2–6 ghế. Admin được bật bot và giới hạn số bot trước khi bắt đầu. Bot nội bộ `bot_01`…`bot_05`, biệt danh chung không mạo danh người thật, có ví 10.000 điểm khởi tạo một lần và ledger như player; UI hiện nhãn bot. Admin hủy bàn chờ/đang chơi sẽ hoàn đúng một lần; không hủy bàn đã chốt. Một bàn chỉ có một ván.
+
+Ba Cây chia ba lá, góp ante và so điểm ngay theo `card_games.js` (10 điểm cao nhất và tie break đã ghi trong unit test). Poker có ante, fixed-limit stake, một raise/vòng, check/bet/call/fold, 4 vòng, all-in/side-pot. `actionVersion` chống gọi lại lượt cũ, `turnDeadline` 45 giây được kiểm server; `cardTick` mỗi phút thực hiện check hoặc fold nếu hết hạn. Bot chọn ngẫu nhiên trong các hành động hợp lệ bằng CSPRNG, không nhắm người chơi. Engine chốt bảo toàn tổng buy-in, ví payout, ledger và public state trong một transaction; audit ghi action/start/config/cancel/timeout. Không có matchmaking tự động, multi-hand, friend link/push hay spectator riêng; cần thử trên nhiều thiết bị và kiểm tải trước buổi học.
 
 ## Security/triển khai
 

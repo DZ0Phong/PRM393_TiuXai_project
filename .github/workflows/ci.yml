@@ -26,4 +26,4 @@ jobs:
       - run: npm --prefix functions test
       - run: npm --prefix functions run check
       - run: npm --prefix functions audit --omit=dev --audit-level=high
-      - run: node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test functions/integration/emulator.test.js"
+      - run: node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test --test-concurrency=1 functions/integration/emulator.test.js functions/integration/card_tables.test.js"

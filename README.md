@@ -5,8 +5,8 @@
 ## Hiện trạng (01/11/2026)
 
 - **Chơi được trên Emulator:** Tài/Xỉu, Bầu Cua, Xóc Xóc (ba phòng phiên độc lập). Mỗi phiên 30 giây, một cược/người, 10–1000 điểm, tối đa 100 cược. Admin mở phiên random hoặc chọn kết quả hợp lệ **sau khi khóa cược**; kết quả không sửa lại được. Mọi chọn kết quả, lý do và tác động ví được ghi `auditLogs` **chỉ admin đọc**. `tick` khóa phiên quá hạn và tự chốt random trên Firebase thật; Emulator không tự chạy Scheduler, admin nhấn Khóa/Chốt thủ công.
-- **Nền tảng luật/test:** module đánh giá Poker Texas Hold’em và Ba Cây (`functions/src/card_games.js`). **Poker/Ba Cây chưa có phòng đa người, bot hay UI chơi; không công bố là đã chơi được.** Đây là mốc tiếp theo.
-- Email/password, hồ sơ khởi tạo 10.000 điểm một lần, lịch sử ledger, admin điều chỉnh điểm có lý do/requestId, khóa tài khoản. Không còn callable nạp/rút.
+- **Poker/Ba Cây chơi được trên Emulator:** bàn 2–6 ghế, mua vào 10× ante (ante 10–100), tham gia bằng mã bàn, chủ bàn bắt đầu khi đủ tối thiểu 2 ghế. Admin cấu hình tối đa 0–5 bot theo sức chứa bàn, hủy/hoàn với lý do. Ba Cây chia ba lá và so 10 điểm ngay; Poker Texas Hold’em ante, cược giới hạn cố định, 4 vòng, một lần raise mỗi vòng, kiểm all-in/side-pot. Mỗi lượt 45 giây; scheduler tự check/fold khi quá hạn, bot dùng cùng engine và ví/ledger. Bài riêng chỉ chủ bài đọc. Bot hiển thị nhãn để lớp nhận biết; không mạo danh bạn học. Một ván/bàn; muốn chơi tiếp tạo bàn mới.
+- Email/password, hồ sơ khởi tạo 10.000 điểm một lần, lịch sử ledger, bảng xếp hạng 20 tài khoản bằng biệt danh ngắn (ẩn email/bot), admin điều chỉnh điểm có lý do/requestId, khóa tài khoản. Không còn callable nạp/rút.
 - Backend giới hạn quyền bằng admin custom claim; Firestore client chỉ đọc dữ liệu cho phép, không được ghi. Firestore audit không phải hệ thống chứng cứ bất biến trước chủ Firebase project.
 
 ## Chạy local
@@ -45,10 +45,10 @@ flutter test
 flutter build apk --debug
 npm.cmd --prefix functions test
 npm.cmd --prefix functions run check
-node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test functions/integration/emulator.test.js"
+node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test --test-concurrency=1 functions/integration/emulator.test.js functions/integration/card_tables.test.js"
 ```
 
-CI chạy test Flutter, Android debug build, Functions và Emulator. Không có APK release có chữ ký phân phối hay deploy production trong repo. Không đưa `google-services.json`, key ký APK hoặc mật khẩu vào Git.
+CI chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Không có APK release có chữ ký phân phối hay deploy production trong repo. Không đưa `google-services.json`, key ký APK hoặc mật khẩu vào Git.
 
 ## Quy tắc và hạn chế
 
@@ -56,6 +56,6 @@ CI chạy test Flutter, Android debug build, Functions và Emulator. Không có 
 - Bầu Cua: ba mặt trong `bau,cua,tom,ca,ga,nai`; trúng nhận `(1+số mặt khớp)×cược`.
 - Xóc Xóc: **quy tắc mô phỏng tự chọn** bốn bit 0/1; tổng chẵn/lẻ, trúng 2× cược. Cần nhóm xác nhận luật mong muốn trước buổi demo.
 - Player nhìn thấy chế độ `random/admin` của phiên trước cược nhưng **không** được đọc audit/lý do, thông tin cá nhân người khác. Cần nêu rõ với lớp rằng admin có thể chọn kết quả; không trình bày như trò ngẫu nhiên công bằng nếu là phiên admin.
-- Scheduler có thể chậm tối đa một chu kỳ; sau hạn cược server từ chối cược dù UI còn `open`. Transaction chống chốt/hủy lặp. Chưa benchmark tải, chưa xử lý đầy đủ offline/reconnect, chưa có bot, mời bạn, App Check enforcement hoặc sản phẩm APK ký release.
+- Scheduler kiểm mỗi phút, có thể trễ vì dịch vụ; server từ chối cược/hành động sau hạn dù UI vẫn hiển thị trạng thái cũ. Transaction và requestId/version chống ghi trùng; bot không tự thao túng thắng/thua. Mời bạn bằng mã bàn, chưa có link mời/push notification hoặc matchmaking tự động. Chưa benchmark tải, chưa kiểm thử offline/reconnect trên thiết bị thật, chưa enforce App Check hoặc có APK ký release.
 
-Xem `docs/ARCHITECTURE.md` và `docs/VALIDATION.md`. Lịch sử Git vẫn giữ bản cũ; tag `backup/pre-rebuild-main-2026-11-01`, `backup/pre-rebuild-hiep-2026-11-01` và bundle ngoại repo là điểm rollback. Không force-push.
+Xem `docs/ARCHITECTURE.md`, `docs/VALIDATION.md` và `docs/RELEASE_CHECKLIST.md`. Lịch sử Git vẫn giữ bản cũ; tag `backup/pre-rebuild-main-2026-11-01`, `backup/pre-rebuild-hiep-2026-11-01` và bundle ngoại repo là điểm rollback. Không force-push.

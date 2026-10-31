@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'features/admin/admin_console.dart';
+import 'features/cards/card_table_screen.dart';
 import 'features/game/game_specs.dart';
 import 'features/game/round_bets.dart';
 
@@ -229,6 +230,66 @@ class _LobbyState extends State<Lobby> {
     return token.claims?['admin'] == true;
   }
 
+  void _showLeaderboard() {
+    final ranking = functions.httpsCallable('getLeaderboard').call();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 560),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Bảng xếp hạng xu ảo',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Chỉ là điểm mô phỏng, không có thưởng hay quy đổi.',
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: FutureBuilder<HttpsCallableResult<dynamic>>(
+                    future: ranking,
+                    builder: (context, result) {
+                      if (result.hasError) {
+                        return Text(
+                          'Không tải được: ${readableError(result.error!)}',
+                        );
+                      }
+                      if (!result.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final rows = result.data!.data;
+                      if (rows is! List || rows.isEmpty) {
+                        return const Text('Chưa có người chơi.');
+                      }
+                      return ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final row in rows.whereType<Map>())
+                            ListTile(
+                              leading: Text('#${row['rank'] ?? '—'}'),
+                              title: Text('${row['nickname'] ?? 'Người chơi'}'),
+                              trailing: Text('${row['balance'] ?? '—'} xu'),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -278,7 +339,7 @@ class _LobbyState extends State<Lobby> {
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
                 Text(
-                  'Một cuộc vui, ba cách thử vận may.',
+                  'Năm trò chơi, chỉ dùng điểm ảo.',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 12),
@@ -314,6 +375,11 @@ class _LobbyState extends State<Lobby> {
                     );
                   },
                 ),
+                OutlinedButton.icon(
+                  onPressed: _showLeaderboard,
+                  icon: const Icon(Icons.leaderboard_outlined),
+                  label: const Text('Bảng xếp hạng xu ảo'),
+                ),
                 const SizedBox(height: 8),
                 ...games.map(
                   (game) => Card(
@@ -341,13 +407,29 @@ class _LobbyState extends State<Lobby> {
                     ),
                   ),
                 ),
-                for (final name in ['Poker', 'Ba Cây'])
+                for (final entry in const [
+                  ('poker', 'Poker'),
+                  ('ba_cay', 'Ba Cây'),
+                ])
                   Card(
                     child: ListTile(
-                      leading: const Icon(Icons.lock_clock_outlined),
-                      title: Text(name),
-                      subtitle: const Text('Đang phát triển • Chưa thể chơi'),
-                      enabled: false,
+                      leading: const Icon(Icons.style_outlined),
+                      title: Text(entry.$2),
+                      subtitle: Text(
+                        entry.$1 == 'poker'
+                            ? 'Bàn 2–6 ghế • Texas Hold’em ante/cược giới hạn'
+                            : 'Bàn 2–6 ghế • ba lá, góp ante rồi so điểm',
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 17),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => CardTableScreen(
+                            uid: widget.user.uid,
+                            isAdmin: isAdmin,
+                            game: entry.$1,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 const SizedBox(height: 20),

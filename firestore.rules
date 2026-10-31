@@ -13,6 +13,11 @@ service cloud.firestore {
    allow read: if active();
    match /bets/{uid} { allow read: if active() && (request.auth.uid == uid || admin()); }
   }
+  match /cardTables/{id} {
+   allow read: if active();
+   match /hands/{uid} { allow read: if active() && request.auth.uid == uid; }
+  }
+  match /cardSecrets/{id} { allow read, write: if false; }
   match /auditLogs/{id} { allow read: if admin(); }
   match /{document=**} { allow write: if false; }
  }
