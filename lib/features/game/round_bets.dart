@@ -29,12 +29,14 @@ class RoundBets extends StatelessWidget {
           if (bets.isEmpty) return const ListTile(title: Text('Chưa có cược.'));
           final totals = <String, int>{};
           for (final bet in bets) {
-            final side = bet.data()['side']?.toString() ?? '?';
-            totals.update(
-              side,
-              (n) => n + (bet.data()['amount'] as num).toInt(),
-              ifAbsent: () => (bet.data()['amount'] as num).toInt(),
-            );
+            final stakes = bet.data()['stakes'] as Map? ?? {};
+            for (final entry in stakes.entries) {
+              totals.update(
+                entry.key.toString(),
+                (n) => n + (entry.value as num).toInt(),
+                ifAbsent: () => (entry.value as num).toInt(),
+              );
+            }
           }
           return Column(
             children: [
@@ -49,7 +51,7 @@ class RoundBets extends StatelessWidget {
                 (bet) => ListTile(
                   title: Text(bet.id),
                   subtitle: Text(
-                    '${bet.data()['side']} • ${bet.data()['amount']} xu • '
+                    '${bet.data()['stakes']} • ${bet.data()['amount']} xu • '
                     'Ghi có: ${bet.data()['credit'] ?? 'Chờ kết quả'}',
                   ),
                 ),

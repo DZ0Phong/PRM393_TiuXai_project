@@ -25,6 +25,7 @@ class CardTableScreen extends StatefulWidget {
 
 class _CardTableScreenState extends State<CardTableScreen> {
   final _stake = TextEditingController(text: '100');
+  final _raise = TextEditingController(text: '100');
   final _tableInput = TextEditingController();
   final _reason = TextEditingController();
   final _functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
@@ -119,6 +120,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
   @override
   void dispose() {
     _stake.dispose();
+    _raise.dispose();
     _tableInput.dispose();
     _reason.dispose();
     super.dispose();
@@ -485,6 +487,21 @@ class _CardTableScreenState extends State<CardTableScreen> {
           final tables = snapshot.data!.docs.where(
             (doc) => doc.data()['status'] == 'waiting',
           );
+          final finished =
+              snapshot.data!.docs
+                  .where((doc) => doc.data()['status'] == 'settled')
+                  .toList()
+                ..sort((a, b) {
+                  final x =
+                      (a.data()['settledAt'] as Timestamp?)
+                          ?.millisecondsSinceEpoch ??
+                      0;
+                  final y =
+                      (b.data()['settledAt'] as Timestamp?)
+                          ?.millisecondsSinceEpoch ??
+                      0;
+                  return y.compareTo(x);
+                });
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -515,6 +532,20 @@ class _CardTableScreenState extends State<CardTableScreen> {
                       child: const Text('Tham gia'),
                     ),
                   ),
+                ),
+              const SizedBox(height: 18),
+              Text(
+                '10 bàn đã chốt gần nhất (không phải cầu dự đoán)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              for (final doc in finished.take(10))
+                ListTile(
+                  dense: true,
+                  title: Text('Bàn ${doc.id}'),
+                  subtitle: Text(
+                    'Thắng: ${_winners(doc.data()['winners'])} • ${doc.data()['stake'] ?? '—'} xu',
+                  ),
+                  onTap: () => setState(() => _openTable(doc.id)),
                 ),
             ],
           );
@@ -658,6 +689,13 @@ class _CardTableScreenState extends State<CardTableScreen> {
             ),
             if (table['actionVersion'] is! int)
               const Text('Đang chờ phiên bản lượt từ máy chủ.'),
+            TextField(
+              controller: _raise,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Mức tố thêm (tối thiểu ante)',
+              ),
+            ),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -668,12 +706,15 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   'call',
                   'raise',
                   'fold',
+                  'all-in',
                 ])
                   FilledButton.tonal(
                     onPressed: canAct && table['actionVersion'] is int
                         ? () => _call('cardAction', {
                             'tableId': id,
                             'type': action,
+                            if (action == 'raise')
+                              'amount': int.tryParse(_raise.text.trim()),
                             'version': table['actionVersion'] as int,
                           })
                         : null,
@@ -684,6 +725,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                         'call': 'Call',
                         'raise': 'Raise',
                         'fold': 'Fold',
+                        'all-in': 'All-in',
                       }[action]!,
                     ),
                   ),
@@ -695,6 +737,10 @@ class _CardTableScreenState extends State<CardTableScreen> {
             Text('Kết quả', style: Theme.of(context).textTheme.titleMedium),
             Text('Người thắng: ${_winners(table['winners'])}'),
             Text('Pot: ${table['pot'] ?? '—'} xu ảo'),
+            if (widget.game == 'ba_cay')
+              Text(
+                'Chương: ${table['dealerUid'] ?? '—'} • phí: ${table['rake'] ?? 0} xu',
+              ),
           ],
           if (status == 'cancelled')
             const Text('Bàn đã hủy; kết quả/số dư do máy chủ xử lý.'),

@@ -45,7 +45,7 @@ test('2–6 seats: JSON state, complete unique cards, private/public separation 
   }
 });
 
-test('fixed betting, turn enforcement, immutable input and street reveal', () => {
+test('betting, turn enforcement, immutable input and street reveal', () => {
   const original = start(seats(2), 10, newDeck());
   assert.throws(() => settle(original), /complete/);
   assert.equal(canCheck(original, 'p0'), true);
@@ -63,8 +63,9 @@ test('fixed betting, turn enforcement, immutable input and street reveal', () =>
   assert.equal(raised.roundBet, 20);
   assert.equal(raised.raises, 1);
   assert.equal(raised.turnUid, 'p0');
-  assert.throws(() => play(raised, 'raise'));
-  const flop = play(raised, 'call');
+  const reRaised = act(raised, 'p0', {type: 'raise', amount: 20}, 10);
+  assert.equal(reRaised.roundBet, 40);
+  const flop = play(reRaised, 'call');
   assert.equal(flop.street, 'flop');
   assert.equal(flop.roundBet, 0);
   assert.equal(flop.seats[0].committed, 0);
@@ -109,6 +110,71 @@ test('all-in bettor, full raise and a second side pot', () => {
   assert.equal(total(s), 220);
 });
 
+test('all-in short call keeps the bet and pays main and side pots', () => {
+  const deck = orderedDeck(['KS', 'AS', 'QS', 'KH', 'AH', 'QH', '2C', '3D', '7S', '9C', 'JD']);
+  let s = start([{uid: 'a', stack: 100}, {uid: 'b', stack: 15}, {uid: 'c', stack: 100}], 10, deck);
+  s = play(s, 'bet');
+  s = play(s, 'all-in');
+  assert.equal(s.seats[1].stack, 0);
+  assert.equal(s.roundBet, 10);
+  assert.equal(s.raises, 0);
+  assert.equal(s.turnUid, 'c');
+  s = checkToEnd(play(s, 'call'));
+  assert.deepEqual(s.seats.map(seat => seat.stack), [90, 45, 80]);
+  assert.equal(total(s), 215);
+});
+
+test('all-in short raise reopens action even below the base stake', () => {
+  let s = start([{uid: 'a', stack: 100}, {uid: 'b', stack: 25}, {uid: 'c', stack: 100}], 10, newDeck());
+  s = play(s, 'bet');
+  s = play(s, 'all-in'); // five beyond the call, less than the fixed ten-chip raise
+  assert.equal(s.roundBet, 15);
+  assert.equal(s.raises, 1);
+  assert.deepEqual(s.pending, ['a', 'c']);
+  assert.equal(s.turnUid, 'c');
+  assert.equal(act(s, 'c', {type: 'raise', amount: 10}, 10).roundBet, 25);
+  s = play(s, 'call');
+  assert.equal(s.turnUid, 'a');
+  assert.equal(canCheck(s, 'a'), false);
+  s = play(s, 'call');
+  assert.equal(s.street, 'flop');
+  assert.equal(s.pot, 75);
+  s = checkToEnd(s);
+  assert.equal(total(s), 225);
+});
+
+test('all-in remains available after a raise', () => {
+  let s = start(seats(3), 10, newDeck());
+  s = play(play(s, 'bet'), 'raise');
+  assert.equal(s.raises, 1);
+  s = play(s, 'all-in');
+  assert.equal(s.roundBet, 90);
+  assert.equal(s.turnUid, 'p0');
+  assert.deepEqual(s.pending, ['p0', 'p1']);
+  assert.throws(() => play(s, 'raise'));
+  s = play(play(s, 'call'), 'call');
+  assert.equal(s.phase, 'settled');
+  assert.equal(total(s), 300);
+});
+
+test('all-in bet can be called and runs out when no one can act', () => {
+  let s = start([{uid: 'a', stack: 20}, {uid: 'b', stack: 20}], 10, newDeck());
+  s = play(s, 'all-in');
+  assert.equal(s.roundBet, 10);
+  assert.equal(s.turnUid, 'b');
+  s = play(s, 'all-in');
+  assert.equal(s.phase, 'settled');
+  assert.equal(s.street, 'showdown');
+  assert.equal(total(s), 40);
+
+  s = start([{uid: 'a', stack: 15}, {uid: 'b', stack: 100}], 10, newDeck());
+  s = play(s, 'all-in');
+  assert.equal(s.roundBet, 5);
+  assert.equal(s.turnUid, 'b');
+  s = checkToEnd(play(s, 'call'));
+  assert.equal(total(s), 115);
+});
+
 test('fold refunds unmatched bet; tied odd chip goes to earliest seat', () => {
   let s = start(seats(2), 10, newDeck());
   s = play(play(s, 'bet'), 'fold');
@@ -137,6 +203,7 @@ test('all-in from ante runs out without turn; bot uses legal actions only', () =
     const action = chooseBotAction(bot, 'b', size => i % size);
     assert.doesNotThrow(() => act(bot, 'b', action, 10));
   }
+  assert.deepEqual(chooseBotAction(bot, 'b', () => 2), {type: 'all-in'});
   assert.deepEqual(chooseBotAction(bot, 'b', n => n - 1), {type: 'fold'});
   assert.throws(() => chooseBotAction(bot, 'p'));
   assert.throws(() => chooseBotAction(bot, 'b', () => 99));
@@ -153,7 +220,7 @@ test('reject malformed seats, deck, stake, actions and private hand access', () 
   for (const bad of [deck.slice(1), [...deck.slice(1), deck[1]], [...deck.slice(1), 'ZZ'],
     [...deck.slice(1), null], [...deck.slice(1), '10D']]) assert.throws(() => start(seats(2), 10, bad));
   const s = start(seats(2), 10, deck);
-  for (const action of [null, {}, {type: 'wat'}, {type: 'all-in'}, {type: 'call'},
+  for (const action of [null, {}, {type: 'wat'}, {type: 'call'},
     {type: 'raise'}, {type: 'check', amount: 0}, {type: 'bet', amount: 10},
     {type: 'fold', extra: true}, ['check']]) {
     assert.throws(() => act(s, 'p0', action, 10));
@@ -188,4 +255,15 @@ test('500 seeded Poker hands: legal bot turns finish and conserve every buy-in',
     assert.equal(total(state), count * 100, `count=${count}, hand=${hand}`);
     assert.ok(state.winners.length >= 1);
   }
+});
+
+test('raise accepts chosen increment >= stake and rejects invalid/unsafe amounts', () => {
+  let s = play(start(seats(2), 10, newDeck()), 'bet');
+  for (const amount of [0, 9, -1, 1.5, '25', Number.MAX_SAFE_INTEGER]) {
+    assert.throws(() => act(s, 'p1', {type: 'raise', amount}, 10));
+  }
+  s = act(s, 'p1', {type: 'raise', amount: 25}, 10);
+  assert.equal(s.roundBet, 35);
+  assert.equal(s.seats[1].stack, 55);
+  assert.equal(s.turnUid, 'p0');
 });

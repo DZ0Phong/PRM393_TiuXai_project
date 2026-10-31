@@ -12,6 +12,7 @@ import 'features/admin/admin_console.dart';
 import 'features/cards/card_table_screen.dart';
 import 'features/game/game_specs.dart';
 import 'features/game/round_bets.dart';
+import 'features/game/round_history.dart';
 
 const emulator = bool.fromEnvironment('EMULATORS', defaultValue: kDebugMode);
 const configuredHost = String.fromEnvironment('EMULATOR_HOST');
@@ -511,7 +512,7 @@ class RoundScreen extends StatefulWidget {
 }
 
 class _RoundScreenState extends State<RoundScreen> {
-  final amount = TextEditingController(text: '100');
+  final amount = TextEditingController(text: '1000');
   final result = TextEditingController();
   final reason = TextEditingController();
   final now = ValueNotifier(DateTime.now());
@@ -758,6 +759,7 @@ class _RoundScreenState extends State<RoundScreen> {
                               const Text(
                                 'Phiên đã hủy; cược được hoàn theo máy chủ.',
                               ),
+                            RoundHistory(game: widget.game),
                             const SizedBox(height: 12),
                             TextField(
                               controller: amount,
@@ -795,7 +797,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                                     value <= 0) {
                                                   setState(
                                                     () => message =
-                                                        'Nhập số xu cược hợp lệ.',
+                                                        'Cược tối thiểu 1000 xu; bội số 100. Xóc Xóc: 1000/10000/50000/100000/1000000.',
                                                   );
                                                   return;
                                                 }
@@ -803,6 +805,11 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   'roundId': id,
                                                   'side': side.$1,
                                                   'amount': value,
+                                                  'requestId': FirebaseFirestore
+                                                      .instance
+                                                      .collection('requestIds')
+                                                      .doc()
+                                                      .id,
                                                 });
                                               },
                                         child: Text('Cược ${side.$2}'),
@@ -831,7 +838,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                 return Text(
                                   data == null
                                       ? 'Bạn chưa cược phiên này.'
-                                      : 'Cược của bạn: ${data['side']} • ${data['amount']} xu '
+                                      : 'Cược của bạn: ${data['stakes']} • ${data['amount']} xu '
                                             '• Ghi có: ${data['credit'] ?? 'chờ kết quả'}',
                                 );
                               },

@@ -83,7 +83,9 @@ function register({db, call, admin}) {
       return {uid: s.uid, nickname: original.nickname, stack: s.stack, committed: s.committed || 0, roundBet: s.roundBet || 0, folded: s.folded === true};
     });
     const winners = (raw.winners || []).map((uid) => ({uid, nickname: seats.find((seat) => seat.uid === uid)?.nickname || uid}));
-    return {seats: publicSeats, board: raw.board || [], pot: raw.pot ?? state.pot, street: raw.street || state.street || 'showdown', turnUid: raw.turnUid || null, winners, status: state.phase === 'settled' ? 'settled' : 'playing', turnDeadline: state.phase === 'settled' ? null : Timestamp.fromMillis(Date.now() + 45000)};
+    return {seats: publicSeats, board: raw.board || [], pot: raw.pot ?? state.pot,
+      ...(state.game === 'ba_cay' ? {dealerUid: state.dealerUid, nextDealerUid: state.nextDealerUid || null, rake: state.rake || 0} : {}), street: raw.street || state.street || 'showdown', turnUid: raw.turnUid || null, winners, status: state.phase === 'settled' ? 'settled' : 'playing',
+      ...(state.phase === 'settled' ? {settledAt: now()} : {}), turnDeadline: state.phase === 'settled' ? null : Timestamp.fromMillis(Date.now() + 45000)};
   }
   function botActions(state, botUids, stake) {
     let steps = 0;
@@ -98,7 +100,7 @@ function register({db, call, admin}) {
   function writeSettlement(tx, tableId, state, walletSnaps) {
     const stakeSum = state.seats.reduce((total, s) => total + s.stack, 0);
     const buyInSum = state.seats.length * state.stake * 10;
-    if (stakeSum !== buyInSum) error('Bảo toàn điểm thất bại');
+    if (stakeSum + (state.rake || 0) !== buyInSum) error('Bảo toàn điểm thất bại');
     for (const seat of state.seats) {
       const snap = walletSnaps.get(seat.uid);
       if (!snap?.exists) error('Ví người chơi không còn');
@@ -222,7 +224,7 @@ function register({db, call, admin}) {
         tx.set(secret, {state}, {merge: true});
         for (const seat of seats) tx.create(ref.collection('hands').doc(seat.uid), {cards: engines[data.game].privateHand(state, seat.uid), tableId: ref.id});
         tx.update(ref, {...publicData, botsEnabled: FieldValue.delete(), maxBots: FieldValue.delete(), actionVersion: 1, startedAt: now()});
-        audit(tx, actor, 'TABLE_START', {tableId: ref.id, game: data.game, players: seats.map(s => ({uid: s.uid, isBot: config.botUids.includes(s.uid)})), status: publicData.status});
+        audit(tx, actor, 'TABLE_START', {tableId: ref.id, game: data.game, players: seats.map(s => ({uid: s.uid, isBot: config.botUids.includes(s.uid)})), status: publicData.status, rake: state.rake || 0});
         return {tableId: ref.id, status: publicData.status};
       });
     }),
@@ -237,8 +239,14 @@ function register({db, call, admin}) {
         if (data.turnDeadline?.toMillis() <= Date.now()) error('Đã hết thời gian lượt');
         if (data.turnUid !== uid || !data.seats.some(s => s.uid === uid) || configuration(data, hidden.data()).botUids.includes(uid)) throw new HttpsError('permission-denied', 'Chưa tới lượt của bạn');
         const input = req.data?.type;
-        if (!['check', 'bet', 'call', 'raise', 'fold'].includes(input)) throw new HttpsError('invalid-argument', 'Hành động không hợp lệ');
-        let state = poker.act(hidden.data().state, uid, {type: input}, data.stake);
+        if (!['check', 'bet', 'call', 'raise', 'fold', 'all-in'].includes(input)) throw new HttpsError('invalid-argument', 'Hành động không hợp lệ');
+        const raiseAmount = req.data?.amount;
+        if (input === 'raise' && (!Number.isSafeInteger(raiseAmount) || raiseAmount < data.stake))
+          throw new HttpsError('invalid-argument', 'Mức tố phải ít nhất bằng ante');
+        if (input !== 'raise' && raiseAmount !== undefined)
+          throw new HttpsError('invalid-argument', 'Chỉ tố mới có mức cược');
+        let state = poker.act(hidden.data().state, uid,
+          input === 'raise' ? {type: input, amount: raiseAmount} : {type: input}, data.stake);
         if (state.phase === 'showdown') state = poker.settle(state);
         state = botActions(state, configuration(data, hidden.data()).botUids, data.stake);
         state.game = data.game; state.stake = data.stake;

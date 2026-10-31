@@ -29,26 +29,33 @@ const games = [
     'bau_cua',
     'Bầu Cua',
     '02',
-    'Ba biểu tượng • chọn một linh vật',
-    '3 mặt: bau,cua,tom,ca,ga,nai',
+    'Ba biểu tượng • đặt nhiều cửa, thắng theo số mặt',
+    '3 mặt: nai,bau,ga,ca,cua,tom',
     Icons.grid_view_rounded,
     [
+      ('nai', 'Hươu'),
       ('bau', 'Bầu'),
+      ('ga', 'Gà'),
+      ('ca', 'Cá'),
       ('cua', 'Cua'),
       ('tom', 'Tôm'),
-      ('ca', 'Cá'),
-      ('ga', 'Gà'),
-      ('nai', 'Nai'),
     ],
   ),
   GameSpec(
     'xoc_xoc',
     'Xóc Xóc',
     '03',
-    'Bốn đồng xu • chọn Chẵn hoặc Lẻ',
+    'Bốn đồng xu • sáu cửa, có thể đặt nhiều cửa',
     '4 đồng xu 0/1, ví dụ: 0,1,0,1',
     Icons.toll_outlined,
-    [('chan', 'Chẵn'), ('le', 'Lẻ')],
+    [
+      ('chan', 'Chẵn'),
+      ('le', 'Lẻ'),
+      ('red3', '3 đỏ'),
+      ('red4', '4 đỏ'),
+      ('white3', '3 trắng'),
+      ('white4', '4 trắng'),
+    ],
   ),
 ];
 
@@ -86,5 +93,5 @@ String formatOutcome(GameSpec game, Map outcome) {
   final name = label.isEmpty ? side?.toString() ?? '—' : label.first.$2;
   return game.id == 'tai_xiu'
       ? '$name • tổng ${outcome['total'] ?? '—'}'
-      : '$name • ${outcome['ones'] ?? '—'} mặt 1';
+      : '$name • ${outcome['ones'] ?? '—'} mặt đỏ • thắng: ${(outcome['winningSides'] as List?)?.join(', ') ?? '—'}';
 }

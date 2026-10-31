@@ -76,27 +76,37 @@ exports.startRound = call(async (req) => {
 });
 
 exports.placeBet = call(async (req) => {
-  const roundId = id(req.data?.roundId), {side, amount} = req.data || {};
+  const roundId = id(req.data?.roundId), requestId = id(req.data?.requestId), {side, amount} = req.data || {};
   const ref = db.doc(`rounds/${roundId}`), user = db.doc(`users/${req.auth.uid}`), bet = ref.collection('bets').doc(req.auth.uid);
+  const op = user.collection('operations').doc(`bet_${roundId}_${requestId}`);
   return db.runTransaction(async (tx) => {
-    const [r, u, b] = await Promise.all([tx.get(ref), tx.get(user), tx.get(bet)]);
+    const [r, u, b, existing] = await Promise.all([tx.get(ref), tx.get(user), tx.get(bet), tx.get(op)]);
     active(u);
     if (!r.exists) fail('Không có phiên');
     const game = r.data().game;
     if (!games.validateBet(game, side, amount)) throw new HttpsError('invalid-argument', 'Cược không hợp lệ');
-    if (b.exists) {
-      if (b.data().side !== side || b.data().amount !== amount) throw new HttpsError('already-exists', 'Đã có cược khác trong phiên');
+    if (existing.exists) {
+      const old = existing.data();
+      if (old.side !== side || old.stake !== amount) throw new HttpsError('already-exists', 'requestId đã dùng với cược khác');
       return b.data();
     }
     if (r.data().status !== 'open' || r.data().closesAt.toMillis() <= Date.now()) fail('Đã khóa cược');
     if (u.data().balance < amount) fail('Không đủ điểm');
-    if (r.data().betCount >= 100) fail('Phòng tối đa 100 người/phiên');
-    const balance = u.data().balance - amount, data = {uid: req.auth.uid, side, amount, at: now()};
+    if (!b.exists && r.data().betCount >= 100) fail('Phòng tối đa 100 người/phiên');
+    const old = b.exists ? b.data() : null;
+    if (old && (!old.stakes || !Number.isSafeInteger(old.amount))) fail('Dữ liệu cược cũ không tương thích');
+    if (game === 'tai_xiu' && old && old.side !== side) fail('Tài Xỉu chỉ được cược cùng một cửa');
+    const total = (old?.amount || 0) + amount;
+    if (!Number.isSafeInteger(total) || total > 1000000) fail('Tổng cược mỗi người tối đa 1000000');
+    const balance = u.data().balance - amount;
+    const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? side : null, amount: total,
+      stakes: {...(old?.stakes || {}), [side]: (old?.stakes?.[side] || 0) + amount},
+      at: old?.at || now(), lastAt: now()};
     tx.update(user, {balance});
-    tx.create(bet, data);
-    tx.create(user.collection('operations').doc(`bet_${roundId}`), {kind: 'bet', game, roundId, delta: -amount, balance, at: now()});
-    tx.update(ref, {betCount: r.data().betCount + 1});
-    audit(tx, req.auth.uid, 'BET', {game, roundId, side, amount});
+    if (b.exists) tx.update(bet, data); else tx.create(bet, data);
+    tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, at: now()});
+    if (!b.exists) tx.update(ref, {betCount: r.data().betCount + 1});
+    audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, side, amount});
     return data;
   });
 });
@@ -129,16 +139,19 @@ async function settle(roundId, actor, suppliedResult, suppliedReason) {
     const auditReason = data.mode === 'admin' ? reason(suppliedReason) : 'Server CSPRNG';
     const bets = await tx.get(ref.collection('bets'));
     const users = await Promise.all(bets.docs.map((b) => tx.get(db.doc(`users/${b.id}`))));
+    const credits = games.creditsForRound(data.game, bets.docs.map((b) => ({
+      uid: b.id, ...b.data(), atMillis: b.data().at?.toMillis() || 0,
+    })), result);
     bets.docs.forEach((b, i) => {
-      const credit = games.payout(data.game, b.data().side, b.data().amount, result);
+      const {credit, refund} = credits[i];
       const balance = users[i].data().balance + credit;
       if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
       tx.update(users[i].ref, {balance});
-      tx.update(b.ref, {credit, settledAt: now()});
-      tx.create(users[i].ref.collection('operations').doc(`result_${roundId}`), {kind: 'payout', game: data.game, roundId, delta: credit, balance, at: now()});
+      tx.update(b.ref, {credit, refund, settledAt: now()});
+      tx.create(users[i].ref.collection('operations').doc(`result_${roundId}`), {kind: 'payout', game: data.game, roundId, delta: credit, refund, balance, at: now()});
     });
     tx.update(ref, {status: 'settled', result, outcome: games.describeOutcome(data.game, result), settledAt: now()});
-    audit(tx, actor, 'SETTLE', {game: data.game, roundId, mode: data.mode, result, reason: auditReason, credits: bets.docs.map((b, i) => ({uid: b.id, credit: games.payout(data.game, b.data().side, b.data().amount, result)}))});
+    audit(tx, actor, 'SETTLE', {game: data.game, roundId, mode: data.mode, result, reason: auditReason, credits});
     return {ok: true};
   });
 }

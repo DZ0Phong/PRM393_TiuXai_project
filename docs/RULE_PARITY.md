@@ -1,25 +1,30 @@
-# Luật backend đang chạy và mức độ đối chiếu Go88
+# Luật đang chạy — đối chiếu bản Go88 tham khảo (01/11/2026)
 
-Đối chiếu **tĩnh** ngày 01/11/2026 với bản Go88 đã giải nén tại máy phát triển (`contents/Go88/app/`); không chạy, nhập source/dependency/asset của bản tải ngoài. Những nhánh không kiểm kê không được coi là tương đương. **Năm trò hiện tại là luật mô phỏng riêng để test luồng, không phải bản port tương đương Go88.** Các đường dẫn Go88 dưới đây là tương đối với thư mục `app/` của bản tham khảo, không tồn tại trong repo nhóm.
+Đây là **bản viết lại độc lập** dựa trên việc đọc tĩnh các file trong `C:\Users\Hiep\Downloads\gameGO88_unpacked\contents\Go88\app`. Không chạy mã tải ngoài, không sao chép asset/credential của bản đó. Các file tham khảo không nằm trong repo này. **Chưa khẳng định tương đương toàn bộ Go88.**
 
-| Trò | Backend repo này (testable) | Khác biệt có thể xác nhận trong bản tham khảo |
+| Trò | Đã làm và test | Khác biệt còn lại |
 |---|---|---|
-| Tài/Xỉu | Ba xúc xắc, tổng 11–17 Tài/4–10 Xỉu; bộ ba đồng mặt thua hai cửa; trúng nhận 2× cược gồm vốn. Một cược/người/phiên, 10–1000 điểm. | `Cron/taixiu.js` xét tổng >10, **không loại bộ ba** trong nhánh xét Tài/Xỉu đã đọc. Lãi thắng trừ phí 2% làm tròn lên; có cân cửa/hoàn cược và khả năng cộng cược. Đây **không** là cùng bảng thắng/thua/điểm với repo. |
-| Bầu Cua | Sáu mặt `bau,cua,tom,ca,ga,nai`; trúng n mặt trả `(1+n)×cược`, tối đa một mặt cược/người/phiên. | `Cron/baucua.js` dùng chỉ số `hươu,bầu,gà,cá,cua,tôm`, lãi trúng mặt nhân 0,98; `Controllers/game/baucua/cuoc.js` hỗ trợ nhiều cửa/cộng cược. Biểu diễn mặt và tiền nhận khác. |
-| Xóc Xóc | Bốn bit 0/1; chỉ có Chẵn/Lẻ theo tổng bit, trúng 2×. | `Controllers/game/XocXoc/init.js` có thêm 3/4 đỏ và 3/4 trắng (tổng sáu cửa), trả 1,98×/3,94×/14,7× theo cửa; `Controllers/game/XocXoc/cuoc.js` cho cược nhiều cửa. |
-| Poker | Texas Hold’em chọn 5 lá mạnh nhất từ 7, ante chung, cược fixed-limit, một lần raise/vòng, có all-in **thông qua call khi thiếu stack** và side pot; không trừ phí. | `Controllers/game/poker/lib/room.js` và `player.js` có cách đặt/tố/tất tay và xử lý tiền thắng/phí khác. Không khẳng định cùng bàn cược hoặc cùng cơ chế so bài. Repo hiện **không có nút all-in chủ động**. |
-| Ba Cây | Bộ 52 lá; ba lá/người, điểm 0 đổi thành 10; so điểm rồi thứ tự lá/chất, một người thắng toàn pot, không trừ phí. | `Controllers/game/BaCay/lib/room.js` dùng 36 lá đầu, có Chương/Gà và đối chiếu người chơi với Chương, chốt/phí khác. Đây là mô phỏng khác cấu trúc bàn. |
+| Tài/Xỉu | `Cron/taixiu.js`: 3 xúc xắc, tổng >10 là Tài, **bộ ba vẫn thắng**; trả gốc + lãi sau phí 2% làm tròn lên. Cược tiếp cùng cửa trong phiên; phần dư của cửa đông tiền được hoàn trước thanh toán. 216 kết quả và ca hoàn/chốt lặp được test. | Thứ tự hoàn ở bản Mongo không xác định rõ; bản này sắp theo lúc cược đầu tiên + UID để có kết quả lặp lại. Đơn vị điểm ảo và giới hạn khác cấu hình Go88. |
+| Bầu Cua | `Cron/baucua.js`, `Controllers/game/baucua/cuoc.js`: mặt Hươu, Bầu, Gà, Cá, Cua, Tôm; trúng n mặt nhận gốc + 0,98×n×cược; cược bổ sung nhiều cửa. Test 216 kết quả. | Chỉ dùng cược bội số 100 để ví/ledger giữ số nguyên; không nhập bot hay cấu hình kinh tế Go88. |
+| Xóc Xóc | `Controllers/game/XocXoc/init.js`, `cuoc.js`: bốn bit, sáu cửa Chẵn/Lẻ/3 đỏ/4 đỏ/3 trắng/4 trắng; trả 1,98×/3,94×/14,7×; các cửa thắng có thể đồng thời; cược tiếp nhiều cửa. Test cả 16 mẫu. | Đơn vị điểm ảo và lịch phiên thay thế; không dùng bot/config Go88. |
+| Poker | `Controllers/game/poker/lib/room.js`, `player.js`: Texas Hold’em 52 lá; engine hiện có 4 vòng, so best-5/7, all-in chủ động, side-pot và bot đi lượt hợp lệ. | **Chưa tương đương:** source có cược mở đầu không đều, tính phí thắng 2%, hòa hoàn cược. Bản này vẫn ante bằng nhau, tố tăng số tiền tùy chọn nhưng bet mở đầu bằng ante, chia pot hòa, không rake. Một ván/bàn. |
+| Ba Cây | `Controllers/game/BaCay/lib/room.js`, `player.js`: 36 lá A–9, 0 điểm là 10, so điểm rồi chất/lá theo source; Chương so từng người khác, lãi 0,98× làm tròn xuống mỗi đối đầu, ghi Chương kế tiếp. Test 7.140 bộ ba và 2–6 ghế. | **Chưa tương đương:** source có vòng Gà và chơi nhiều ván liên tiếp; repo hiện một ván/bàn, chưa xử lý Gà/luân chuyển Chương sang ván mới. |
 
-## Phần đã hoạt động trong repo
+`placeBet` cần `requestId` riêng cho **mỗi lần thêm cược**; gọi lại cùng ID/payload không trừ điểm lần hai, dùng ID cũ với tiền/cửa khác bị từ chối. Tài/Xỉu chỉ thêm cùng cửa; Bầu Cua/Xóc Xóc cho thêm nhiều cửa. Cược tối thiểu 1000, tối đa 1000000/người/phiên và bội số 100; Xóc Xóc nhận mệnh giá 1000/10000/50000/100000/1000000 như handler tham khảo. Một phòng tối đa 100 **người**/phiên. Mọi trừ/trả điểm qua Functions transaction + ledger; chỉ admin chọn kết quả hợp lệ **sau khi khóa cược**, audit chỉ admin đọc; hủy/hoàn một lần. Không có nạp/rút/giải thưởng.
 
-- Server chịu trách nhiệm toàn bộ điểm, cược, chia bài/chốt kết quả; Firestore client không được ghi. Ledger theo UID và `requestId`/mã phiên, transaction và test retry/race để tránh trừ/hoàn/chốt lặp. Hai trò bài giữ bài kín ở `cardSecrets`; player chỉ đọc bài riêng của mình ở `hands/{uid}`.
-- Admin mở phiên ở chế độ `admin` hoặc `random`. Với **ba trò phiên**, admin chỉ được chọn **kết quả hợp lệ sau khi hết hạn và phiên đã `locked`**; không sửa kết quả terminal. Kết quả/lý do/tác động ghi audit chỉ admin đọc. Phiên `random` dùng CSPRNG, không nhận kết quả do admin truyền. Hủy trước chốt trả lại điểm đúng một lần.
-- Poker/Ba Cây 2–6 ghế, tối thiểu hai ghế mới bắt đầu. Admin bật/tắt, giới hạn bot ở bàn chờ; bot dùng ví và engine chung, không tạo điểm mỗi bàn. Hành động bot là nội bộ cùng kiểm tra luật, **không phải bot gọi Firebase Auth/callable như thiết bị thật**. Không nhắm cá nhân để điều chỉnh thắng/thua.
+Với ante Ba Cây nhỏ như 10 xu, `floor(0,98×ante)` làm phí hiệu dụng lớn hơn 2%; demo giữ đúng phép làm tròn của source, không gọi đây là phí phẳng 2%.
 
-## Chưa làm / cần quyết định trước khi đổi luật
+## Cầu / biểu đồ
 
-1. Nhóm chốt **luật nào là bài tập cần kiểm**: luật mô phỏng hiện tại (dễ test, không phí) hay bảng luật tương thích một phần Go88. Nếu đổi, phải chốt bộ ba Tài/Xỉu, phí/làm tròn, sáu cửa Xóc Xóc, cược đa cửa và Chương/Gà; sửa **engine + callable + ledger + UI + tests đồng thời**, không thay một công thức đơn lẻ. Không sao chép source/asset bản tham khảo vào repo khi chưa rõ quyền sử dụng.
-2. Emulator trên mỗi máy có dữ liệu riêng; chưa có Firebase production, backend online, App Check, release signing, thử tải đồng thời nhiều điện thoại. Scheduler không tự chạy trong bộ Emulator local hiện tại; admin dùng Khóa/Chốt thủ công và integration test gọi hàm timeout.
-3. Poker/Ba Cây hiện **một ván/bàn**; chưa có mời bằng link, tự ghép bàn, multi-hand hoặc reconnect test trên thiết bị thật. Những phần này không được coi là đã hoàn thiện chỉ vì unit/integration test xanh.
+Đọc tĩnh client `public/web/src/project.js` và backend tương ứng:
 
-Các test hiện tại kiểm **luật mô phỏng được ghi ở đây**, không chứng minh tương đương toàn bộ source tham khảo hay khả năng tải nhiều thiết bị trên Firebase thật.
+- **Tài/Xỉu:** nguồn `Controllers/taixiu/index.js` trả 125 phiên gần nhất; client có cầu nhóm các kết quả cùng Tài/Xỉu (tối đa 5 ô/cột, 20 cột) và biểu đồ 19 phiên gần nhất gồm tổng và từng xúc xắc. App hiện có cầu + biểu đồ cùng cửa sổ lịch sử này.
+- **Xóc Xóc:** nguồn `Controllers/game/XocXoc/ingame.js` gửi 48 phiên; client nhóm Chẵn/Lẻ (tối đa 4 ô/cột, 12 cột). App hiện có cầu và danh sách kết quả bốn mặt.
+- **Bầu Cua:** `Controllers/game/baucua/regOpen.js` trả 10 phiên mới, client hiện ba mặt của từng phiên; `BauCua_temp.js` giữ tần suất tích lũy. App hiện có 15 phiên mới và đếm mặt **chỉ trong cửa sổ đó**; không gọi đó là tần suất toàn lịch sử.
+- **Poker/Ba Cây nhiều người:** chưa tìm thấy cầu công khai tương ứng trong client/backend đã khảo sát; đừng biến bảng thắng thành “dự đoán cầu”. App có danh sách 10 bàn đã chốt gần nhất theo trò, không gọi đó là cầu dự đoán; không có biểu đồ cầu kiểu Tài/Xỉu cho Poker/Ba Cây.
+
+Cầu chỉ mô tả kết quả đã chốt, **không dự đoán** hay thay đổi thuật toán chốt. Kết quả admin chọn và random lưu cùng định dạng; widget cầu không hiển thị `mode`, nhưng tài liệu phiên Firestore công khai **có** `mode`. Actor/lý do/credit chi tiết chỉ nằm trong audit admin. Query lịch sử cần index `game/status/settledAt` trong `firestore.indexes.json`.
+
+## Chưa kiểm chứng
+
+Chưa chạy source gốc để so sánh từng trace, chưa có bộ fixture chính thức cho vòng Poker/Gà Ba Cây, chưa test tải đông người hay release production. Firebase Emulator mỗi máy có dữ liệu riêng; thay đổi schema cược từ `side/amount` sang `stakes/amount` **không hỗ trợ phiên đang mở của bản cũ**—dừng/xóa dữ liệu emulator thử nghiệm trước khi đổi phiên bản. Không deploy lên Firebase thật, không có APK release cấu hình thật. Đây là phạm vi còn lại cho nhóm trước khi tuyên bố “logic đủ 5 trò theo Go88”.

@@ -112,8 +112,12 @@ function advance(state, after) {
 function act(state, uid, action, stake) {
   if (!state || state.phase !== 'playing' || !integer(stake) || stake !== state.stake ||
       typeof uid !== 'string' || uid !== state.turnUid || !action || Array.isArray(action) ||
-      typeof action !== 'object' || Object.keys(action).length !== 1 ||
-      !['check', 'bet', 'call', 'raise', 'fold'].includes(action.type)) {
+      typeof action !== 'object' ||
+      !['check', 'bet', 'call', 'raise', 'all-in', 'fold'].includes(action.type) ||
+      (action.type === 'raise' ?
+        Object.keys(action).some(key => !['type', 'amount'].includes(key)) ||
+          (action.amount !== undefined && (!integer(action.amount) || action.amount < stake)) :
+        Object.keys(action).length !== 1)) {
     throw new RangeError('Invalid turn or action');
   }
   const index = state.seats.findIndex(seat => seat.uid === uid);
@@ -124,21 +128,23 @@ function act(state, uid, action, stake) {
   if (action.type === 'check' && toCall !== 0 ||
       action.type === 'call' && toCall <= 0 ||
       action.type === 'bet' && state.roundBet !== 0 ||
-      action.type === 'raise' && (state.roundBet === 0 || state.raises !== 0)) {
+      action.type === 'raise' && state.roundBet === 0) {
     throw new RangeError('Illegal betting action');
   }
   if (action.type === 'call') amount = Math.min(toCall, seat.stack);
+  if (action.type === 'all-in') amount = seat.stack;
   if (action.type === 'bet') amount = stake;
-  if (action.type === 'raise') amount = toCall + stake;
+  if (action.type === 'raise') amount = toCall + (action.amount ?? stake);
   if (amount > seat.stack) throw new RangeError('Insufficient stack');
   const updated = {...seat, stack: seat.stack - amount, committed: seat.committed + amount,
     roundBet: seat.committed + amount, contributed: seat.contributed + amount,
     folded: action.type === 'fold' ? true : seat.folded};
   const players = state.seats.map((player, i) => i === index ? updated : player);
-  const aggression = action.type === 'bet' || action.type === 'raise';
+  const allInRaise = action.type === 'all-in' && updated.committed > state.roundBet;
+  const aggression = action.type === 'bet' || action.type === 'raise' || allInRaise;
   const next = {...state, seats: players, pot: state.pot + amount,
     roundBet: aggression ? updated.committed : state.roundBet,
-    raises: state.raises + (action.type === 'raise' ? 1 : 0),
+    raises: state.raises + (action.type === 'raise' || (allInRaise && state.roundBet > 0) ? 1 : 0),
     pending: aggression ? players.filter(player => player.uid !== uid && able(player)).map(player => player.uid) :
       state.pending.filter(id => id !== uid)};
   return advance(next, index);
@@ -168,7 +174,7 @@ function canCheck(state, uid) {
 
 function chooseBotAction(state, uid, rng = randomInt) {
   if (typeof rng !== 'function') throw new TypeError('Invalid random source');
-  const candidates = ['check', 'call', 'bet', 'raise', 'fold'].map(type => ({type}));
+  const candidates = ['check', 'call', 'bet', 'raise', 'all-in', 'fold'].map(type => ({type}));
   const legal = candidates.filter(action => {
     try { act(state, uid, action, state.stake); return true; } catch (error) {
       if (error instanceof RangeError) return false;

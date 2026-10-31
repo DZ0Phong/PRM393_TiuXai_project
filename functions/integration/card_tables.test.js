@@ -59,7 +59,7 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     assert.ok(ba.seats.every(s => !Object.hasOwn(s, 'isBot')));
     assert.equal(ba.hands, undefined);
     assert.equal((await db.doc(`cardTables/${baId}/hands/${a.user.uid}`).get()).data().cards.length, 3);
-    assert.equal((await db.doc(`users/${a.user.uid}`).get()).data().balance + (await db.doc(`users/${baBot}`).get()).data().balance, 20000);
+    assert.equal((await db.doc(`users/${a.user.uid}`).get()).data().balance + (await db.doc(`users/${baBot}`).get()).data().balance, 19998);
     await assert.rejects(b.call('cardAction', {tableId: baId, type: 'bet', version: 1}));
     const {tableId: changingId} = await a.call('createCardTable', {game: 'poker', stake: 10, maxSeats: 3, requestId: 'bot-waiting-001'});
     await assert.rejects(b.call('configureCardBots', {tableId: changingId, enabled: true, maxBots: 2}));
@@ -192,7 +192,7 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     assert.ok(multi.seats.every(s => !Object.hasOwn(s, 'isBot')));
     const multiBots = multi.seats.filter(s => s.uid !== c.user.uid).map(s => s.uid);
     assert.deepEqual(multiBots, poolIds.slice(0, 2));
-    assert.equal(await previous(c.user.uid, ...multiBots), beforeMultiBot);
+    assert.equal(await previous(c.user.uid, ...multiBots), beforeMultiBot - 2);
     const ranking = await b.call('getLeaderboard');
     assert.equal(ranking.length, 4);
     assert.ok(ranking.every(row => row.nickname.startsWith('Bạn ') && Number.isSafeInteger(row.balance)));
