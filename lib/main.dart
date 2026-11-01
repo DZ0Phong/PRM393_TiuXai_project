@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 
 import 'features/admin/admin_console.dart';
+import 'features/auth/sign_in_screen.dart';
 import 'features/cards/card_table_screen.dart';
 import 'features/game/game_specs.dart';
 import 'features/game/round_bets.dart';
@@ -123,112 +124,6 @@ String readableError(Object error) => error is FirebaseFunctionsException
     : error is FirebaseAuthException
     ? (error.message ?? 'Đăng nhập thất bại (${error.code}).')
     : 'Không thể kết nối. Kiểm tra mạng rồi thử lại: $error';
-
-class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
-  @override
-  State<SignInScreen> createState() => _SignInScreenState();
-}
-
-class _SignInScreenState extends State<SignInScreen> {
-  final email = TextEditingController();
-  final password = TextEditingController();
-  bool busy = false;
-  String? error;
-  @override
-  void dispose() {
-    email.dispose();
-    password.dispose();
-    super.dispose();
-  }
-
-  Future<void> submit(bool register) async {
-    if (busy) return;
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      if (register) {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email.text.trim(),
-          password: password.text,
-        );
-      } else {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: email.text.trim(),
-          password: password.text,
-        );
-      }
-    } catch (e) {
-      if (mounted) setState(() => error = readableError(e));
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(28),
-          children: [
-            const Icon(
-              Icons.casino_outlined,
-              size: 54,
-              color: Color(0xff277767),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Vào phòng chơi',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Chỉ dùng xu ảo • Không nạp/rút tiền • Không đổi thưởng.',
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Mật khẩu (ít nhất 6 ký tự)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (busy) const LinearProgressIndicator(),
-            if (error != null)
-              Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: busy ? null : () => submit(false),
-              child: const Text('Đăng nhập'),
-            ),
-            TextButton(
-              onPressed: busy ? null : () => submit(true),
-              child: const Text('Tạo tài khoản'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
 
 class Lobby extends StatefulWidget {
   final User user;
