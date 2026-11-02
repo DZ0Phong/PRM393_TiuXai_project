@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../../core/app_text.dart';
 import '../cards/presentation/screens/card_table_screen.dart';
 import '../game/game_specs.dart';
 import '../profile/profile_screen.dart';

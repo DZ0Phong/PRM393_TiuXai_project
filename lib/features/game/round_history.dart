@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../../core/app_preferences.dart';
+import '../../core/app_text.dart';
 import 'game_specs.dart';
 
 /// A historical description, never a prediction or an input to settlement.
@@ -106,75 +108,113 @@ class RoundHistory extends StatelessWidget {
               height,
               game.id == 'tai_xiu' ? 20 : 12,
             );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    '${game.id == 'tai_xiu' ? 'Tài/Xỉu' : 'Chẵn/Lẻ'}: ${selected.length} phiên, tối đa ${columns.length} cột × $height ô. Lịch sử không bảo đảm kết quả tiếp theo.',
-                  ),
-                ),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final column in columns)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 3),
-                            child: Column(
-                              children: [
-                                for (final side in column)
-                                  Container(
-                                    width: 30,
-                                    height: 30,
-                                    margin: const EdgeInsets.only(bottom: 3),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: side == 'triple'
-                                          ? Colors.amber.shade100
-                                          : side == 'tai' || side == 'chan'
-                                          ? Colors.red.shade100
-                                          : Colors.blue.shade100,
-                                    ),
-                                    child: Text(
-                                      side == 'tai'
-                                          ? 'T'
-                                          : side == 'xiu'
-                                          ? 'X'
-                                          : side == 'chan'
-                                          ? 'C'
-                                          : side == 'le'
-                                          ? 'L'
-                                          : side == 'triple'
-                                          ? 'B'
-                                          : '?',
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                      ],
+            return FutureBuilder<String>(
+              future: AppPreferences.roadStyle(),
+              builder: (context, styleSnapshot) {
+                final roadStyle = styleSnapshot.data ?? 'Cầu Bàn Cờ';
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        '${game.id == 'tai_xiu' ? 'Tài/Xỉu' : 'Chẵn/Lẻ'}: ${selected.length} phiên, tối đa ${columns.length} cột × $height ô. Lịch sử không bảo đảm kết quả tiếp theo.',
+                      ),
                     ),
-                  ),
-                ),
-                if (game.id == 'tai_xiu')
-                  _DiceChart(rows.take(19).toList().reversed.toList()),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    'Gần nhất: ${rows.take(8).map((r) => (r['result'] as List? ?? []).join(',')).join('  |  ')}',
-                  ),
-                ),
-              ],
+                    if (roadStyle == 'Cầu Tóm Tắt')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Wrap(
+                          spacing: 5,
+                          runSpacing: 5,
+                          children: [
+                            for (final side in sides.take(30).toList().reversed)
+                              _RoadMark(side: side, style: roadStyle),
+                          ],
+                        ),
+                      )
+                    else
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final column in columns)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 3),
+                                  child: Column(
+                                    children: [
+                                      for (final side in column)
+                                        _RoadMark(side: side, style: roadStyle),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (game.id == 'tai_xiu')
+                      _DiceChart(rows.take(19).toList().reversed.toList()),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Gần nhất: ${rows.take(8).map((r) => (r['result'] as List? ?? []).join(',')).join('  |  ')}',
+                      ),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
       ],
+    );
+  }
+}
+
+class _RoadMark extends StatelessWidget {
+  final String side;
+  final String style;
+
+  const _RoadMark({required this.side, required this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = switch (side) {
+      'tai' => 'T',
+      'xiu' => 'X',
+      'chan' => 'C',
+      'le' => 'L',
+      'triple' => 'B',
+      _ => '?',
+    };
+    final color = side == 'triple'
+        ? Colors.amber.shade100
+        : side == 'tai' || side == 'chan'
+        ? Colors.red.shade100
+        : Colors.blue.shade100;
+    return Container(
+      width: 30,
+      height: style == 'Cầu Tóm Tắt' ? 26 : 30,
+      margin: const EdgeInsets.only(bottom: 3),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        shape: style == 'Cầu Bàn Cờ' ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: style == 'Cầu Giọt Nước'
+            ? const BorderRadius.only(
+                topLeft: Radius.circular(15),
+                topRight: Radius.circular(15),
+                bottomLeft: Radius.circular(15),
+                bottomRight: Radius.circular(3),
+              )
+            : style == 'Cầu Tóm Tắt'
+            ? BorderRadius.circular(6)
+            : null,
+      ),
+      child: Text(text),
     );
   }
 }

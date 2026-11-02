@@ -6,8 +6,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart'
     show kDebugMode, defaultTargetPlatform, TargetPlatform;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import 'core/app_preferences.dart';
+import 'core/app_text.dart';
 import 'features/auth/sign_in_screen.dart';
 import 'features/admin/admin_console.dart';
 import 'features/lobby/lobby_screen.dart';
@@ -76,6 +78,7 @@ Future<void> main() async {
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
       functions.useFunctionsEmulator(host, 5001);
     }
+    await AppPreferences.loadLanguage();
     runApp(const GameApp());
   } catch (error) {
     runApp(
