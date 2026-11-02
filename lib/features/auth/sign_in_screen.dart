@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'password_recovery_screen.dart';
+
 class SignInScreen extends StatefulWidget {
   final bool initialRegisterTab;
   const SignInScreen({super.key, this.initialRegisterTab = false});
@@ -1300,9 +1302,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 ],
               ),
               TextButton(
-                onPressed: () => _showInfoDialog(
-                  'Quên Mật Khẩu',
-                  'Trong môi trường demo PRM393, bạn có thể tạo tài khoản mới ngay lập tức hoặc bấm nút "Demo Admin" góc trên để vào hệ thống.',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PasswordRecoveryScreen(),
+                  ),
                 ),
                 child: const Text(
                   'Quên mật khẩu?',

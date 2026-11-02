@@ -4,15 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
+import 'account_settings_screen.dart';
+import 'about_app_screen.dart';
+import 'app_settings_screen.dart';
+import 'terms_of_use_screen.dart';
+import 'privacy_policy_screen.dart';
+import '../auth/otp_verification_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   final User user;
   final bool isAdmin;
 
-  const ProfileScreen({
-    super.key,
-    required this.user,
-    required this.isAdmin,
-  });
+  const ProfileScreen({super.key, required this.user, required this.isAdmin});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -69,7 +74,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         content: Text(
           content,
-          style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 14, height: 1.4),
+          style: const TextStyle(
+            color: Color(0xffe1e2eb),
+            fontSize: 14,
+            height: 1.4,
+          ),
         ),
         actions: [
           FilledButton(
@@ -78,7 +87,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               foregroundColor: Colors.black,
             ),
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Đóng', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Đóng',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -138,7 +150,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                       if (!result.hasData) {
                         return const Center(
-                          child: CircularProgressIndicator(color: Color(0xffffc174)),
+                          child: CircularProgressIndicator(
+                            color: Color(0xffffc174),
+                          ),
                         );
                       }
                       final rows = result.data!.data;
@@ -156,7 +170,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           for (final row in rows.whereType<Map>())
                             Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xff272a31),
                                 borderRadius: BorderRadius.circular(10),
@@ -173,14 +190,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     backgroundColor: row['rank'] == 1
                                         ? const Color(0xffffc174)
                                         : (row['rank'] == 2
-                                            ? const Color(0xffe1e2eb)
-                                            : const Color(0xff32353c)),
+                                              ? const Color(0xffe1e2eb)
+                                              : const Color(0xff32353c)),
                                     child: Text(
                                       '#${row['rank'] ?? '—'}',
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: row['rank'] <= 2 ? Colors.black : Colors.white,
+                                        color: row['rank'] <= 2
+                                            ? Colors.black
+                                            : Colors.white,
                                       ),
                                     ),
                                   ),
@@ -239,10 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                    colors: [
-                      Color(0x24f59e0b),
-                      Color(0x0010131a),
-                    ],
+                    colors: [Color(0x24f59e0b), Color(0x0010131a)],
                   ),
                 ),
               ),
@@ -273,13 +289,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             .limit(30)
                             .snapshots(),
                         builder: (context, opsSnap) {
-                          final ops = opsSnap.data?.docs.map((d) => d.data()).toList() ?? [];
+                          final ops =
+                              opsSnap.data?.docs
+                                  .map((d) => d.data())
+                                  .toList() ??
+                              [];
 
                           return Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 520),
                               child: ListView(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
                                 children: [
                                   // Profile Hero Card
                                   _buildProfileHeroCard(shortUid, isBlocked),
@@ -345,7 +368,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xffe1e2eb), size: 20),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xffe1e2eb),
+              size: 20,
+            ),
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Quay lại',
           ),
@@ -359,7 +386,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.support_agent, color: Color(0xffffc174), size: 22),
+            icon: const Icon(
+              Icons.support_agent,
+              color: Color(0xffffc174),
+              size: 22,
+            ),
             onPressed: () => _showInfoDialog(
               'Hỗ Trợ Khách Hàng VIP',
               'Đội ngũ quản trị viên hỗ trợ giải đáp luật và xử lý điểm ảo: Hotline 1900 8888.',
@@ -378,7 +409,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0x22ffc174)),
         boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 12, offset: Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       padding: const EdgeInsets.all(16),
@@ -396,7 +431,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const LinearGradient(
-                        colors: [Color(0xffffc174), Color(0xfff59e0b), Color(0xffffb95f)],
+                        colors: [
+                          Color(0xffffc174),
+                          Color(0xfff59e0b),
+                          Color(0xffffb95f),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -415,12 +454,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       shape: BoxShape.circle,
                       color: Color(0xff0b0e14),
                     ),
-                    child: const Icon(Icons.person, color: Color(0xffffc174), size: 40),
+                    child: const Icon(
+                      Icons.person,
+                      color: Color(0xffffc174),
+                      size: 40,
+                    ),
                   ),
                   Positioned(
                     bottom: 0,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xfff59e0b), Color(0xffffc174)],
@@ -431,7 +477,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            widget.isAdmin ? Icons.admin_panel_settings : Icons.workspace_premium,
+                            widget.isAdmin
+                                ? Icons.admin_panel_settings
+                                : Icons.workspace_premium,
                             color: const Color(0xff472a00),
                             size: 11,
                           ),
@@ -461,7 +509,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            widget.user.email?.split('@').first.toUpperCase() ?? 'ĐẠI GIA MACAU',
+                            widget.user.email?.split('@').first.toUpperCase() ??
+                                'ĐẠI GIA MACAU',
                             style: const TextStyle(
                               color: Color(0xffffc174),
                               fontSize: 16,
@@ -471,12 +520,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.verified, color: Color(0xffffc174), size: 16),
+                        const Icon(
+                          Icons.verified,
+                          color: Color(0xffffc174),
+                          size: 16,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xff272a31),
                         borderRadius: BorderRadius.circular(12),
@@ -484,10 +540,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.diamond, color: Color(0xffffb95f), size: 12),
+                          const Icon(
+                            Icons.diamond,
+                            color: Color(0xffffb95f),
+                            size: 12,
+                          ),
                           const SizedBox(width: 4),
                           Text(
-                            widget.isAdmin ? 'Quản Trị Viên Hệ Thống' : 'Hội Viên Hoàng Gia Diamond',
+                            widget.isAdmin
+                                ? 'Quản Trị Viên Hệ Thống'
+                                : 'Hội Viên Hoàng Gia Diamond',
                             style: const TextStyle(
                               color: Color(0xffffc174),
                               fontSize: 10,
@@ -504,7 +566,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onTap: _copyUserId,
                           borderRadius: BorderRadius.circular(6),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xff0b0e14),
                               borderRadius: BorderRadius.circular(6),
@@ -532,14 +597,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(width: 8),
                         if (isBlocked)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xff93000a),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Text(
                               'ĐANG KHÓA',
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                       ],
@@ -569,13 +641,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         SizedBox(width: 4),
                         Text(
                           'Tiến độ lên VIP 8 (Hoàng Kim Vương)',
-                          style: TextStyle(color: Color(0xffd8c3ad), fontSize: 11),
+                          style: TextStyle(
+                            color: Color(0xffd8c3ad),
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
                     Text(
                       '82.500 / 100.000 EXP',
-                      style: TextStyle(color: Color(0xffffc174), fontSize: 11, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xffffc174),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -586,7 +665,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     value: 0.825,
                     minHeight: 6,
                     backgroundColor: const Color(0xff0b0e14),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xffffc174)),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Color(0xffffc174),
+                    ),
                   ),
                 ),
               ],
@@ -608,7 +689,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0x33ffc174)),
         boxShadow: const [
-          BoxShadow(color: Colors.black54, blurRadius: 14, offset: Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       padding: const EdgeInsets.all(16),
@@ -623,7 +708,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.account_balance_wallet, color: Color(0xffffc174), size: 16),
+                      Icon(
+                        Icons.account_balance_wallet,
+                        color: Color(0xffffc174),
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'SỐ DƯ KHẢ DỤNG',
@@ -662,10 +751,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.only(left: 6),
                         constraints: const BoxConstraints(),
                         icon: Icon(
-                          _isBalanceVisible ? Icons.visibility : Icons.visibility_off,
+                          _isBalanceVisible
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                           color: const Color(0xffa08e7a),
                         ),
-                        onPressed: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                        onPressed: () => setState(
+                          () => _isBalanceVisible = !_isBalanceVisible,
+                        ),
                       ),
                     ],
                   ),
@@ -676,7 +769,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.military_tech, color: Color(0xff56e5a9), size: 14),
+                      Icon(
+                        Icons.military_tech,
+                        color: Color(0xff56e5a9),
+                        size: 14,
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'VIP POINT',
@@ -691,7 +788,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xff0b0e14),
                       borderRadius: BorderRadius.circular(12),
@@ -728,7 +828,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: const Color(0xff272a31),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.lock, color: Color(0xffffc174), size: 18),
+                  child: const Icon(
+                    Icons.lock,
+                    color: Color(0xffffc174),
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -737,7 +841,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: const [
                       Text(
                         'Két Sắt Hoàng Gia',
-                        style: TextStyle(color: Color(0xffa08e7a), fontSize: 11),
+                        style: TextStyle(
+                          color: Color(0xffa08e7a),
+                          fontSize: 11,
+                        ),
                       ),
                       Text(
                         '500.000 Xu Ảo Khóa',
@@ -753,7 +860,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextButton(
                   style: TextButton.styleFrom(
                     backgroundColor: const Color(0xff272a31),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     minimumSize: const Size(60, 30),
                   ),
                   onPressed: () => _showInfoDialog(
@@ -762,8 +872,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Row(
                     children: const [
-                      Text('Mở Két', style: TextStyle(color: Color(0xffffc174), fontSize: 11)),
-                      Icon(Icons.arrow_forward_ios, color: Color(0xffffc174), size: 10),
+                      Text(
+                        'Mở Két',
+                        style: TextStyle(
+                          color: Color(0xffffc174),
+                          fontSize: 11,
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        color: Color(0xffffc174),
+                        size: 10,
+                      ),
                     ],
                   ),
                 ),
@@ -780,7 +900,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xfff59e0b),
                     foregroundColor: const Color(0xff472a00),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   onPressed: () => _showInfoDialog(
@@ -800,7 +922,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xffe1e2eb),
                     side: const BorderSide(color: Color(0x33ffffff)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   onPressed: () => _showInfoDialog(
@@ -832,7 +956,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: () {
             // Cuộn xuống phần operations hoặc mở chi tiết
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Xem danh sách biến động ví & cược bên dưới.')),
+              const SnackBar(
+                content: Text('Xem danh sách biến động ví & cược bên dưới.'),
+              ),
             );
           },
         ),
@@ -841,7 +967,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           iconBg: const Color(0xff2a1700),
           iconColor: const Color(0xffffc174),
           label: 'Két Sắt VIP',
-          onTap: () => _showInfoDialog('Két Sắt VIP', 'Két sắt bảo toàn số dư đang hoạt động.'),
+          onTap: () => _showInfoDialog(
+            'Két Sắt VIP',
+            'Két sắt bảo toàn số dư đang hoạt động.',
+          ),
         ),
         _buildShortcutItem(
           icon: Icons.leaderboard,
@@ -890,7 +1019,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: iconBg,
                       shape: BoxShape.circle,
-                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 4),
+                      ],
                     ),
                     child: Icon(icon, color: iconColor, size: 22),
                   ),
@@ -904,7 +1035,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xffffb4ab),
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xff10131a), width: 2),
+                          border: Border.all(
+                            color: const Color(0xff10131a),
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
@@ -946,7 +1080,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    final winRate = totalBets > 0 ? ((winCount / totalBets) * 100).toStringAsFixed(1) : '68.4';
+    final winRate = totalBets > 0
+        ? ((winCount / totalBets) * 100).toStringAsFixed(1)
+        : '68.4';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -993,8 +1129,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
-                        Text('Tổng Ván Cược', style: TextStyle(color: Color(0xffa08e7a), fontSize: 11)),
-                        Icon(Icons.history_toggle_off, color: Color(0xffa08e7a), size: 16),
+                        Text(
+                          'Tổng Ván Cược',
+                          style: TextStyle(
+                            color: Color(0xffa08e7a),
+                            fontSize: 11,
+                          ),
+                        ),
+                        Icon(
+                          Icons.history_toggle_off,
+                          color: Color(0xffa08e7a),
+                          size: 16,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -1006,7 +1152,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Text('Tài: 52% | Xỉu: 48%', style: TextStyle(color: Color(0xffa08e7a), fontSize: 10)),
+                    const Text(
+                      'Tài: 52% | Xỉu: 48%',
+                      style: TextStyle(color: Color(0xffa08e7a), fontSize: 10),
+                    ),
                   ],
                 ),
               ),
@@ -1030,9 +1179,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Row(
                           children: const [
-                            Text('Tỉ Lệ Thắng', style: TextStyle(color: Color(0xffa08e7a), fontSize: 11)),
+                            Text(
+                              'Tỉ Lệ Thắng',
+                              style: TextStyle(
+                                color: Color(0xffa08e7a),
+                                fontSize: 11,
+                              ),
+                            ),
                             SizedBox(width: 4),
-                            Icon(Icons.trending_up, color: Color(0xff56e5a9), size: 14),
+                            Icon(
+                              Icons.trending_up,
+                              color: Color(0xff56e5a9),
+                              size: 14,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -1044,7 +1203,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const Text('Đẳng cấp VIP', style: TextStyle(color: Color(0xff56e5a9), fontSize: 10)),
+                        const Text(
+                          'Đẳng cấp VIP',
+                          style: TextStyle(
+                            color: Color(0xff56e5a9),
+                            fontSize: 10,
+                          ),
+                        ),
                       ],
                     ),
                     Container(
@@ -1052,10 +1217,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 38,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xff56e5a9), width: 3),
+                        border: Border.all(
+                          color: const Color(0xff56e5a9),
+                          width: 3,
+                        ),
                       ),
                       child: const Center(
-                        child: Icon(Icons.stars, color: Color(0xff56e5a9), size: 18),
+                        child: Icon(
+                          Icons.stars,
+                          color: Color(0xff56e5a9),
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -1087,7 +1259,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: const Color(0xffa40217),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.local_fire_department, color: Color(0xffffdad7), size: 22),
+                child: const Icon(
+                  Icons.local_fire_department,
+                  color: Color(0xffffdad7),
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1129,7 +1305,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const Text(
                 'Kỷ lục VIP',
-                style: TextStyle(color: Color(0xff56e5a9), fontSize: 11, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Color(0xff56e5a9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -1193,7 +1373,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xff272a31).withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(8),
@@ -1202,7 +1385,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Icon(
                       isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: isPositive ? const Color(0xff56e5a9) : const Color(0xffffb4ab),
+                      color: isPositive
+                          ? const Color(0xff56e5a9)
+                          : const Color(0xffffb4ab),
                       size: 16,
                     ),
                     const SizedBox(width: 8),
@@ -1221,7 +1406,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (roundId.toString().isNotEmpty)
                             Text(
                               'Phiên: $roundId',
-                              style: const TextStyle(color: Color(0xffa08e7a), fontSize: 10),
+                              style: const TextStyle(
+                                color: Color(0xffa08e7a),
+                                fontSize: 10,
+                              ),
                             ),
                         ],
                       ),
@@ -1232,14 +1420,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(
                           '${isPositive ? '+' : ''}$delta xu',
                           style: TextStyle(
-                            color: isPositive ? const Color(0xff56e5a9) : const Color(0xffffb4ab),
+                            color: isPositive
+                                ? const Color(0xff56e5a9)
+                                : const Color(0xffffb4ab),
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
                           'Dư: ${balanceAfter ?? '—'} xu',
-                          style: const TextStyle(color: Color(0xffa08e7a), fontSize: 10),
+                          style: const TextStyle(
+                            color: Color(0xffa08e7a),
+                            fontSize: 10,
+                          ),
                         ),
                       ],
                     ),
@@ -1332,9 +1525,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.manage_accounts,
             title: 'Chỉnh Sửa Hồ Sơ',
             subtitle: 'Biệt danh, số điện thoại, avatar',
-            onTap: () => _showInfoDialog(
-              'Chỉnh Sửa Hồ Sơ',
-              'Thông tin tài khoản được quản lý đồng bộ qua hệ thống Firebase Authentication.',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => EditProfileScreen(user: widget.user),
+              ),
             ),
           ),
           const Divider(height: 1, color: Color(0x1affffff)),
@@ -1342,19 +1536,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.lock_reset,
             title: 'Đổi Mật Khẩu & Bảo Mật',
             subtitle: 'Bảo mật SSL 256-bit, quản lý phiên',
-            onTap: () => _showInfoDialog(
-              'Bảo Mật Tài Khoản',
-              'Để đổi mật khẩu, vui lòng liên hệ Admin hoặc sử dụng email khôi phục.',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ChangePasswordScreen(user: widget.user),
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x1affffff)),
+          _buildMenuRow(
+            icon: Icons.pin_outlined,
+            title: 'Xác Thực OTP (Demo)',
+            subtitle: 'Bàn phím mã 6 số mô phỏng • không gửi SMS',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const OtpVerificationScreen(),
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x1affffff)),
+          _buildMenuRow(
+            icon: Icons.tune,
+            title: 'Cài Đặt Tài Khoản',
+            subtitle: 'Bảo mật, quyền riêng tư và tùy chọn demo',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => AccountSettingsScreen(user: widget.user),
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x1affffff)),
+          _buildMenuRow(
+            icon: Icons.info_outline,
+            title: 'Giới Thiệu Ứng Dụng',
+            subtitle: 'Thông tin và tính năng của bản demo',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AboutAppScreen()),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x1affffff)),
+          _buildMenuRow(
+            icon: Icons.policy_outlined,
+            title: 'Điều Khoản Sử Dụng',
+            subtitle: 'Quy tắc và giới hạn của bản demo xu ảo',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const TermsOfUseScreen()),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x1affffff)),
+          _buildMenuRow(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Chính Sách Bảo Mật',
+            subtitle: 'Dữ liệu tài khoản và môi trường demo',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PrivacyPolicyScreen(user: widget.user),
+              ),
             ),
           ),
           const Divider(height: 1, color: Color(0x1affffff)),
           _buildMenuRow(
             icon: Icons.settings,
-            title: 'Cài Đặt Bàn Cược',
-            subtitle: 'Âm thanh xúc xắc, chế độ nặn 3D',
-            onTap: () => _showInfoDialog(
-              'Cài Đặt Bàn Cược',
-              'Chế độ hiệu ứng âm thanh và đồ họa bàn cược đã kích hoạt ở mức cao nhất.',
+            title: 'Cài Đặt Ứng Dụng',
+            subtitle: 'Âm thanh, hiển thị, thông báo và hệ thống',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AppSettingsScreen(),
+              ),
             ),
           ),
           const Divider(height: 1, color: Color(0x1affffff)),
@@ -1414,7 +1661,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (trailingBadge != null) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xff003824),
                             borderRadius: BorderRadius.circular(10),
@@ -1433,7 +1683,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Text(
                     subtitle,
-                    style: const TextStyle(color: Color(0xffa08e7a), fontSize: 11),
+                    style: const TextStyle(
+                      color: Color(0xffa08e7a),
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -1453,7 +1706,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           foregroundColor: const Color(0xffffb4ab),
           side: const BorderSide(color: Color(0x44ffb4ab)),
           backgroundColor: const Color(0xff690005).withValues(alpha: 0.15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 14),
         ),
         onPressed: () async {
@@ -1463,7 +1718,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         icon: const Icon(Icons.logout, size: 18),
         label: const Text(
           'ĐĂNG XUẤT TÀI KHOẢN',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
         ),
       ),
     );
