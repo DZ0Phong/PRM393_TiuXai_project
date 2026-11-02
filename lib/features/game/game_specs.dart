@@ -88,6 +88,9 @@ String formatOutcome(GameSpec game, Map outcome) {
           .join(' • ');
     }
   }
+  if (game.id == 'tai_xiu' && outcome['triple'] == true) {
+    return 'Bộ ba • cả Tài và Xỉu đều thua • tổng ${outcome['total'] ?? '—'}';
+  }
   final side = outcome['side'];
   final label = game.sides.where((option) => option.$1 == side);
   final name = label.isEmpty ? side?.toString() ?? '—' : label.first.$2;

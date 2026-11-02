@@ -27,6 +27,79 @@ const allowedGame = (value) => {
   if (!['tai_xiu', 'bau_cua', 'xoc_xoc'].includes(value)) throw new HttpsError('invalid-argument', 'Trò chơi không hợp lệ');
   return value;
 };
+const automaticGames = ['tai_xiu', 'bau_cua', 'xoc_xoc'];
+const ROUND_SECONDS = 30;
+const RESULT_REVEAL_SECONDS = 6;
+// Keep a short post-lock window so an admin can choose a result. Unintervened
+// rounds still settle automatically after the window.
+const ADMIN_INTERVENTION_SECONDS = 5;
+
+function emptyBetStats(game) {
+  const sides = games.games[game].sides;
+  return {
+    totals: Object.fromEntries(sides.map((side) => [side, 0])),
+    playerCounts: Object.fromEntries(sides.map((side) => [side, 0])),
+  };
+}
+
+function betStatsFromDocs(docs, game) {
+  const stats = emptyBetStats(game);
+  for (const bet of docs) {
+    for (const [side, amount] of Object.entries(bet.data().stakes || {})) {
+      if (!games.games[game].sides.includes(side) || !Number.isSafeInteger(amount) || amount <= 0) continue;
+      stats.totals[side] += amount;
+      stats.playerCounts[side]++;
+    }
+  }
+  return stats;
+}
+
+async function ensureAutomaticRound(game, actor) {
+  const room = db.doc(`rooms/${game}`), next = db.collection('rounds').doc();
+  return db.runTransaction(async (tx) => {
+    const roomSnap = await tx.get(room);
+    const currentId = roomSnap.data()?.roundId;
+    const currentRef = validId(currentId) ? db.doc(`rounds/${currentId}`) : null;
+    const currentSnap = currentRef ? await tx.get(currentRef) : null;
+    if (currentSnap?.exists) {
+      const current = currentSnap.data();
+      if (!['settled', 'cancelled'].includes(current.status)) {
+        // Upgrade legacy sessions that were manually started in admin mode.
+        // New manual overrides carry intervenedAt and remain admin-controlled.
+        if (current.mode === 'admin' && !current.intervenedAt) {
+          tx.update(currentRef, {mode: 'random', autoModeMigratedAt: now()});
+          audit(tx, actor, 'AUTO_MODE_MIGRATE', {game, roundId: currentId});
+          return {roundId: currentId, status: current.status, created: false, migrated: true};
+        }
+        return {roundId: currentId, status: current.status, created: false};
+      }
+      const finishedAt = current.settledAt?.toMillis?.() ?? current.cancelledAt?.toMillis?.();
+      if (finishedAt && Date.now() < finishedAt + RESULT_REVEAL_SECONDS * 1000) {
+        return {roundId: currentId, status: current.status, created: false, revealDelay: true};
+      }
+    }
+    tx.create(next, {
+      game,
+      mode: 'random',
+      status: 'open',
+      closesAt: Timestamp.fromMillis(Date.now() + ROUND_SECONDS * 1000),
+      createdAt: now(),
+      betCount: 0,
+      ...emptyBetStats(game),
+    });
+    tx.set(room, {roundId: next.id, game});
+    audit(tx, actor, 'AUTO_START', {game, roundId: next.id});
+    return {roundId: next.id, status: 'open', created: true};
+  });
+}
+
+exports.ensureGameRounds = call(async (req) => {
+  const rooms = {};
+  for (const game of automaticGames) {
+    rooms[game] = await ensureAutomaticRound(game, req.auth.uid);
+  }
+  return rooms;
+});
 
 // Public ranking exposes only a pseudonym and simulated balance, never email or private profile.
 exports.getLeaderboard = call(async () => {
@@ -68,7 +141,7 @@ exports.startRound = call(async (req) => {
     const roomSnap = await tx.get(room);
     const previous = roomSnap.exists && validId(roomSnap.data().roundId) ? await tx.get(db.doc(`rounds/${roomSnap.data().roundId}`)) : null;
     if (previous?.exists && !['settled', 'cancelled'].includes(previous.data().status)) fail('Phiên trước chưa kết thúc');
-    tx.create(ref, {game, mode, status: 'open', closesAt: Timestamp.fromMillis(Date.now() + 30000), createdAt: now(), betCount: 0});
+    tx.create(ref, {game, mode, status: 'open', closesAt: Timestamp.fromMillis(Date.now() + 30000), createdAt: now(), betCount: 0, ...emptyBetStats(game)});
     tx.set(room, {roundId: ref.id, game});
     audit(tx, req.auth.uid, 'START', {roundId: ref.id, game, mode});
   });
@@ -92,22 +165,67 @@ exports.placeBet = call(async (req) => {
     }
     if (r.data().status !== 'open' || r.data().closesAt.toMillis() <= Date.now()) fail('Đã khóa cược');
     if (u.data().balance < amount) fail('Không đủ điểm');
-    if (!b.exists && r.data().betCount >= 100) fail('Phòng tối đa 100 người/phiên');
     const old = b.exists ? b.data() : null;
     if (old && (!old.stakes || !Number.isSafeInteger(old.amount))) fail('Dữ liệu cược cũ không tương thích');
+    if (!old && r.data().betCount >= 100) fail('Phòng tối đa 100 người/phiên');
     if (game === 'tai_xiu' && old && old.side !== side) fail('Tài Xỉu chỉ được cược cùng một cửa');
     const total = (old?.amount || 0) + amount;
     if (!Number.isSafeInteger(total) || total > 1000000) fail('Tổng cược mỗi người tối đa 1000000');
     const balance = u.data().balance - amount;
+    const stats = r.data().totals && r.data().playerCounts
+      ? {totals: {...r.data().totals}, playerCounts: {...r.data().playerCounts}}
+      : betStatsFromDocs((await tx.get(ref.collection('bets'))).docs, game);
+    stats.totals[side] = (stats.totals[side] || 0) + amount;
+    if (!(old?.stakes?.[side] > 0)) stats.playerCounts[side] = (stats.playerCounts[side] || 0) + 1;
     const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? side : null, amount: total,
       stakes: {...(old?.stakes || {}), [side]: (old?.stakes?.[side] || 0) + amount},
       at: old?.at || now(), lastAt: now()};
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);
     tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, at: now()});
-    if (!b.exists) tx.update(ref, {betCount: r.data().betCount + 1});
+    tx.update(ref, {...stats, betCount: r.data().betCount + (old ? 0 : 1)});
     audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, side, amount});
     return data;
+  });
+});
+
+// Bầu Cua players may return their complete accepted stake while betting is
+// still open, before the server locks the round.
+exports.refundMyBet = call(async (req) => {
+  const roundId = id(req.data?.roundId), requestId = id(req.data?.requestId);
+  const ref = db.doc(`rounds/${roundId}`), user = db.doc(`users/${req.auth.uid}`);
+  const bet = ref.collection('bets').doc(req.auth.uid);
+  const op = user.collection('operations').doc(`bet_refund_${roundId}_${requestId}`);
+  return db.runTransaction(async (tx) => {
+    const [round, wallet, existingBet, existingOp] = await Promise.all([
+      tx.get(ref), tx.get(user), tx.get(bet), tx.get(op),
+    ]);
+    active(wallet);
+    if (existingOp.exists) return existingOp.data();
+    if (!round.exists || round.data().game !== 'bau_cua') fail('Không có phiên Bầu Cua');
+    if (round.data().status !== 'open' || round.data().closesAt.toMillis() <= Date.now())
+      fail('Chỉ hoàn cược khi phiên còn mở');
+    if (!existingBet.exists || !Number.isSafeInteger(existingBet.data().amount) || existingBet.data().amount <= 0)
+      fail('Không có cược đã xác nhận để hoàn');
+    const amount = existingBet.data().amount;
+    const stats = round.data().totals && round.data().playerCounts
+      ? {totals: {...round.data().totals}, playerCounts: {...round.data().playerCounts}}
+      : betStatsFromDocs((await tx.get(ref.collection('bets'))).docs, 'bau_cua');
+    for (const [side, stake] of Object.entries(existingBet.data().stakes || {})) {
+      if (!Number.isSafeInteger(stake) || stake <= 0) continue;
+      stats.totals[side] = Math.max(0, (stats.totals[side] || 0) - stake);
+      stats.playerCounts[side] = Math.max(0, (stats.playerCounts[side] || 0) - 1);
+    }
+    const balance = wallet.data().balance + amount;
+    if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
+    const at = now();
+    tx.update(user, {balance});
+    tx.update(ref, stats);
+    tx.update(bet, {amount: 0, stakes: {}, side: null, lastAt: at});
+    const operation = {kind: 'bet_refund', roundId, delta: amount, balance, at};
+    tx.create(op, operation);
+    audit(tx, req.auth.uid, 'BET_REFUND', {game: 'bau_cua', roundId, amount});
+    return operation;
   });
 });
 
@@ -124,6 +242,27 @@ async function lock(roundId, actor) {
   });
 }
 exports.lockRound = call(async (req) => { admin(req); return lock(id(req.data?.roundId), req.auth.uid); });
+
+exports.interveneRound = call(async (req) => {
+  admin(req);
+  const roundId = id(req.data?.roundId), why = reason(req.data?.reason), ref = db.doc(`rounds/${roundId}`);
+  return db.runTransaction(async (tx) => {
+    const round = await tx.get(ref);
+    if (!round.exists) fail('Không có phiên');
+    const data = round.data();
+    if (!automaticGames.includes(data.game)) fail('Trò chơi này không dùng phiên cược tự động');
+    if (data.status !== 'locked') fail('Chỉ có thể can thiệp sau khi khóa cược');
+    if (data.mode === 'admin') return {roundId, mode: 'admin', alreadyIntervened: true};
+    tx.update(ref, {
+      mode: 'admin',
+      intervenedAt: now(),
+      intervenedBy: req.auth.uid,
+      interventionReason: why,
+    });
+    audit(tx, req.auth.uid, 'INTERVENE_ROUND', {game: data.game, roundId, reason: why});
+    return {roundId, mode: 'admin'};
+  });
+});
 
 async function settle(roundId, actor, suppliedResult, suppliedReason) {
   const ref = db.doc(`rounds/${roundId}`);
@@ -159,6 +298,28 @@ exports.settleRound = call(async (req) => {
   admin(req);
   const roundId = id(req.data?.roundId);
   return settle(roundId, req.auth.uid, req.data?.result, req.data?.reason);
+});
+// Lets an authenticated player advance only an expired random round. This is
+// also used in the Emulator, where scheduled functions do not run themselves.
+exports.advanceRandomRound = call(async (req) => {
+  const roundId = id(req.data?.roundId), ref = db.doc(`rounds/${roundId}`);
+  const snap = await ref.get();
+  if (!snap.exists) fail('Không có phiên');
+  if (snap.data().mode !== 'random') fail('Phiên này cần quản trị viên chốt');
+  if (snap.data().status === 'settled' || snap.data().status === 'cancelled')
+    return {status: snap.data().status};
+  if (snap.data().status === 'open') {
+    if (snap.data().closesAt.toMillis() > Date.now())
+      return {status: 'open', notDue: true};
+    await lock(roundId, 'scheduler');
+  }
+  const locked = await ref.get();
+  const lockedAt = locked.data()?.lockedAt?.toMillis?.();
+  if (locked.data()?.status === 'locked' && lockedAt &&
+      Date.now() < lockedAt + ADMIN_INTERVENTION_SECONDS * 1000) {
+    return {status: 'locked', waiting: true};
+  }
+  return settle(roundId, 'scheduler');
 });
 exports.cancelRound = call(async (req) => {
   admin(req);
@@ -223,7 +384,12 @@ exports.tick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1
   const due = await db.collection('rounds').where('status', '==', 'open').where('closesAt', '<=', now()).get();
   for (const r of due.docs) await lock(r.id, 'scheduler');
   const random = await db.collection('rounds').where('status', '==', 'locked').get();
-  for (const r of random.docs) if (r.data().mode === 'random') await settle(r.id, 'scheduler');
+  for (const r of random.docs) {
+    const lockedAt = r.data().lockedAt?.toMillis?.() ?? 0;
+    if (r.data().mode === 'random' && Date.now() >= lockedAt + ADMIN_INTERVENTION_SECONDS * 1000)
+      await settle(r.id, 'scheduler');
+  }
+  for (const game of automaticGames) await ensureAutomaticRound(game, 'scheduler');
 });
 const cardTables = require('./card_tables').register({db, call, admin});
 for (const name of ['createCardTable', 'joinCardTable', 'leaveCardTable', 'configureCardBots', 'getCardBotConfig', 'startCardHand', 'cardAction', 'cancelCardTable']) exports[name] = cardTables[name];

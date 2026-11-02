@@ -31,21 +31,25 @@ test('source-informed sides, denominations, strict input and outcome shape', () 
     assert.throws(() => randomOutcome(bad));
   }
   assert.equal(validateBet('xoc_xoc', 'chan', 50000), true);
-  assert.equal(validateBet('xoc_xoc', 'chan', 2000), false);
+  assert.equal(validateBet('xoc_xoc', 'chan', 2000), true);
+  assert.equal(validateBet('xoc_xoc', 'chan', 20000), true);
+  assert.equal(validateBet('xoc_xoc', 'chan', 1100), false);
 });
 
-test('Tài/Xỉu: all 216 outcomes including triples, 10/11 boundary, 2% fee', () => {
+test('Tài/Xỉu: triples lose, 10/11 boundary, 2% fee', () => {
   const counts = {tai: 0, xiu: 0};
   for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) for (let c = 1; c <= 6; c++) {
     const dice = [a, b, c];
-    const side = a + b + c > 10 ? 'tai' : 'xiu'; counts[side]++;
-    assert.deepEqual(describeOutcome('tai_xiu', dice), {dice, total: a + b + c, side});
-    assert.equal(payout('tai_xiu', side, 1000, dice), 1980);
+    const triple = a === b && b === c;
+    const side = triple ? null : a + b + c > 10 ? 'tai' : 'xiu';
+    if (side) counts[side]++;
+    assert.deepEqual(describeOutcome('tai_xiu', dice), {dice, total: a + b + c, triple, side});
+    assert.equal(payout('tai_xiu', side || 'tai', 1000, dice), side ? 1980 : 0);
     assert.equal(payout('tai_xiu', side === 'tai' ? 'xiu' : 'tai', 1000, dice), 0);
   }
-  assert.deepEqual(counts, {tai: 108, xiu: 108});
-  assert.equal(describeOutcome('tai_xiu', [6, 6, 6]).side, 'tai');
-  assert.equal(describeOutcome('tai_xiu', [1, 1, 1]).side, 'xiu');
+  assert.deepEqual(counts, {tai: 105, xiu: 105});
+  assert.equal(describeOutcome('tai_xiu', [6, 6, 6]).side, null);
+  assert.equal(describeOutcome('tai_xiu', [1, 1, 1]).side, null);
 });
 
 test('Tài/Xỉu majority refunds excess deterministically before stake payout', () => {
@@ -56,11 +60,13 @@ test('Tài/Xỉu majority refunds excess deterministically before stake payout',
   ];
   assert.deepEqual(creditsForRound('tai_xiu', bets, [6, 6, 6]), [
     {uid: 'a', refund: 2000, credit: 2000},
-    {uid: 'b', refund: 1000, credit: 2980},
+    {uid: 'b', refund: 1000, credit: 1000},
     {uid: 'c', refund: 0, credit: 0},
   ]);
-  assert.deepEqual(creditsForRound('tai_xiu', bets, [1, 1, 1]).map(x => x.credit), [2000, 1000, 1980]);
-  assert.deepEqual(creditsForRound('tai_xiu', [bets[0]], [6, 6, 6])[0].credit, 2000);
+  assert.deepEqual(creditsForRound('tai_xiu', bets, [1, 1, 1]).map(x => x.credit), [2000, 1000, 0]);
+  assert.deepEqual(creditsForRound('tai_xiu', [
+    {uid: 'solo', side: 'xiu', stakes: {xiu: 2000}, amount: 2000, atMillis: 1},
+  ], [6, 6, 5]), [{uid: 'solo', refund: 0, credit: 0}]);
 });
 
 test('Bầu Cua: all 216 rolls and 0–3 matching faces at 98% profit', () => {

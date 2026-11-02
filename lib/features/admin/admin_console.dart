@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/pending_mutation.dart';
+import '../cards/presentation/screens/card_table_screen.dart';
+import '../game/game_specs.dart';
 
 bool definitiveAdjustError(String code) => const {
   'invalid-argument',
@@ -16,7 +19,15 @@ bool definitiveAdjustError(String code) => const {
 class AdminConsole extends StatefulWidget {
   final String uid;
   final Future<void> Function(String, Map<String, dynamic>) invoke;
-  const AdminConsole({super.key, required this.uid, required this.invoke});
+  final Widget Function(GameSpec) roundBuilder;
+  final bool initiallyExpanded;
+  const AdminConsole({
+    super.key,
+    required this.uid,
+    required this.invoke,
+    required this.roundBuilder,
+    this.initiallyExpanded = false,
+  });
 
   @override
   State<AdminConsole> createState() => _AdminConsoleState();
@@ -27,9 +38,15 @@ class _AdminConsoleState extends State<AdminConsole> {
   final delta = TextEditingController();
   final reason = TextEditingController();
   final store = PendingMutationStore();
+  late final Future<void> profileReady = _ensureProfileAndRounds();
   Map<String, dynamic>? pending;
   bool loaded = false, busy = false;
   String? message;
+
+  Future<void> _ensureProfileAndRounds() async {
+    await widget.invoke('ensureProfile', {});
+    await widget.invoke('ensureGameRounds', {});
+  }
 
   @override
   void initState() {
@@ -188,8 +205,8 @@ class _AdminConsoleState extends State<AdminConsole> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => ExpansionTile(
+  Widget _accountManagementPanel() => ExpansionTile(
+    initiallyExpanded: widget.initiallyExpanded,
     leading: const Icon(Icons.admin_panel_settings_outlined),
     title: const Text('Quản trị'),
     subtitle: const Text('Điều chỉnh xu ảo và nhật ký chỉ dành cho Admin'),
@@ -329,5 +346,134 @@ class _AdminConsoleState extends State<AdminConsole> {
         },
       ),
     ],
+  );
+
+  Widget _gameLink({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required WidgetBuilder builder,
+  }) => Card(
+    color: const Color(0xff191c22),
+    child: ListTile(
+      leading: Icon(icon, color: const Color(0xffffc174)),
+      title: Text(title, style: const TextStyle(color: Color(0xffe1e2eb))),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Color(0xffd8c3ad)),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Color(0xffffc174)),
+      onTap: () =>
+          Navigator.of(context).push(MaterialPageRoute<void>(builder: builder)),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xff10131a),
+    appBar: AppBar(
+      backgroundColor: const Color(0xff0b0e14),
+      foregroundColor: const Color(0xffe1e2eb),
+      title: const Text('ADMIN CONSOLE'),
+      actions: [
+        IconButton(
+          tooltip: 'Đăng xuất',
+          onPressed: () => FirebaseAuth.instance.signOut(),
+          icon: const Icon(Icons.logout),
+        ),
+      ],
+    ),
+    body: FutureBuilder<void>(
+      future: profileReady,
+      builder: (context, profile) {
+        if (profile.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Không tải được hồ sơ quản trị: ${profile.error}'),
+            ),
+          );
+        }
+        if (profile.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xffffc174)),
+          );
+        }
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xff392714), Color(0xff191c22)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xff8d6b31)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings,
+                        color: Color(0xffffc174),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Quản lý phiên game, tài khoản, điểm ảo và nhật ký.',
+                          style: TextStyle(color: Color(0xffe1e2eb)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'QUẢN LÝ PHIÊN GAME',
+                  style: TextStyle(
+                    color: Color(0xffffc174),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                for (final game in games)
+                  _gameLink(
+                    title: game.title,
+                    subtitle: 'Mở bàn quản trị phiên ${game.title}',
+                    icon: game.icon,
+                    builder: (_) => widget.roundBuilder(game),
+                  ),
+                _gameLink(
+                  title: 'Poker',
+                  subtitle: 'Quản lý bàn Poker, lượt và thao tác bài',
+                  icon: Icons.style,
+                  builder: (_) => CardTableScreen(
+                    uid: widget.uid,
+                    isAdmin: true,
+                    game: 'poker',
+                  ),
+                ),
+                _gameLink(
+                  title: 'Ba Cây',
+                  subtitle: 'Quản lý bàn Ba Cây và kết quả ván',
+                  icon: Icons.style_outlined,
+                  builder: (_) => CardTableScreen(
+                    uid: widget.uid,
+                    isAdmin: true,
+                    game: 'ba_cay',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _accountManagementPanel(),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
   );
 }
