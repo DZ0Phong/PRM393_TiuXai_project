@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../detailed_road_screen.dart';
 import 'game_win_effect.dart';
 import 'tai_xiu_dice.dart';
 
@@ -394,53 +394,6 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
             ),
           ),
           const SizedBox(height: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xff191c22),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xff534434)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.verified_user, color: gold, size: 16),
-                const SizedBox(width: 6),
-                const Text(
-                  'MD5 DEMO:',
-                  style: TextStyle(
-                    color: gold,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'e9b04c8524a87ad62fb7cd149811f9d3',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Color(0xffd8c3ad),
-                      fontSize: 10,
-                      letterSpacing: .7,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(
-                      const ClipboardData(
-                        text: 'e9b04c8524a87ad62fb7cd149811f9d3',
-                      ),
-                    );
-                    if (context.mounted) _info('Đã sao chép mã minh họa.');
-                  },
-                  icon: const Icon(Icons.copy, size: 14),
-                  label: const Text('Sao chép', style: TextStyle(fontSize: 10)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 7),
           _dealerStream(),
           const SizedBox(height: 8),
           Container(
@@ -784,75 +737,14 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xff191c22),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xff534434)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.waterfall_chart, color: Color(0xffffc174)),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Dây Cầu Gần Nhất • mẫu',
-                    style: TextStyle(
-                      color: Color(0xffe1e2eb),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-                const Text(
-                  'Tài: 11',
-                  style: TextStyle(
-                    color: Color(0xffffb3ad),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                const Text(
-                  'Xỉu: 9',
-                  style: TextStyle(
-                    color: Color(0xff56e5a9),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                for (final result in const [
-                  true,
-                  false,
-                  true,
-                  true,
-                  false,
-                  true,
-                  false,
-                  false,
-                  true,
-                  false,
-                  true,
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(left: 3),
-                    child: CircleAvatar(
-                      radius: 5,
-                      backgroundColor: result
-                          ? const Color(0xffffb3ad)
-                          : const Color(0xff56e5a9),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 5),
           OutlinedButton.icon(
-            onPressed: () =>
-                _info('Lịch sử chi tiết nằm ở phần mở rộng bên dưới.'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const DetailedRoadScreen(),
+              ),
+            ),
             icon: const Icon(Icons.analytics, size: 16),
-            label: const Text('Bảng Soi Cầu Chi Tiết (Big Road & Cockroach)'),
+            label: const Text('Soi cầu chi tiết · Giọt Nước & Big Road'),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xffd8c3ad),
               side: const BorderSide(color: Color(0xff534434)),

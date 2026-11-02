@@ -1,7 +1,7 @@
 # Nghiệm thu
 
 - Điểm ảo không nạp/rút, không thưởng/quà, không đổi tiền.
-- Ba trò phiên: cược sát hạn bị từ chối server, cược bổ sung trong hạn có requestId chống trùng (Tài/Xỉu cùng cửa, Bầu Cua/Xóc Xóc nhiều cửa), random hoặc kết quả admin hợp lệ sau `locked`; Tài/Xỉu bộ ba thua cả hai cửa, áp dụng phí 2% trên lãi và chỉ hoàn phần cược dư bên nhiều tiền khi cả hai cửa đều có cược; Bầu Cua cho người chơi hoàn cược của mình trước khi khóa; admin có cửa sổ 5 giây sau khóa để can thiệp; chốt/hủy/hoàn retry không nhân đôi ledger; admin audit không lộ player.
+- Ba trò phiên: cược sát hạn bị từ chối server, cược bổ sung trong hạn có requestId chống trùng (Tài/Xỉu cùng cửa, Bầu Cua/Xóc Xóc nhiều cửa), random hoặc kết quả admin hợp lệ sau `locked`; Tài/Xỉu bộ ba thua cả hai cửa, áp dụng phí 2% trên lãi và chỉ hoàn phần cược dư bên nhiều tiền khi cả hai cửa đều có cược; Bầu Cua cho người chơi hoàn cược của mình trước khi khóa; admin có thể tiếp quản phiên đang mở hoặc đã khóa, với cửa sổ tự chốt random 60 giây sau khóa; chốt/hủy/hoàn retry không nhân đôi ledger; admin audit không lộ player.
 - Tài khoản bị khóa không chơi; player không gọi admin API, không ghi trực tiếp Firestore.
 - Poker/Ba Cây đã có unit/integration cho lượt/ví/bot/bài riêng; **chưa nghiệm thu parity đầy đủ với Go88**: Poker còn blind/phí/hòa, Ba Cây còn Gà/ván kế. Cầu chỉ trình bày lịch sử đã chốt, không dự đoán.
 - Flutter analyze/test/debug APK, functions unit + Emulator, kiểm multi-device; App Check và ký release trước khi phát hành.

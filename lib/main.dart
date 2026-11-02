@@ -293,6 +293,204 @@ class _RoundScreenState extends State<RoundScreen> {
     call('interveneRound', {'roundId': id, 'reason': reason.text.trim()});
   }
 
+  DateTime? _roundDeadline(Map<String, dynamic> round) {
+    final closesAt = round['closesAt'];
+    if (closesAt is Timestamp) return closesAt.toDate();
+    final createdAt = round['createdAt'];
+    if (createdAt is Timestamp) {
+      return createdAt.toDate().add(const Duration(seconds: 30));
+    }
+    return null;
+  }
+
+  String _countdownText(int seconds) {
+    final safe = seconds < 0 ? 0 : seconds;
+    return '${(safe ~/ 60).toString().padLeft(2, '0')}:${(safe % 60).toString().padLeft(2, '0')}';
+  }
+
+  Widget _adminRoundControls({
+    required String roundId,
+    required Map<String, dynamic> round,
+    required String status,
+    required bool adminMode,
+    required bool offline,
+  }) => Card(
+    color: const Color(0xff191c22),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.admin_panel_settings, color: Color(0xffffc174)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ĐIỀU HÀNH PHIÊN • ADMIN',
+                  style: TextStyle(
+                    color: Color(0xffffc174),
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: .6,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            adminMode
+                ? 'Backend tự khóa cược khi hết giờ. Sau đó admin nhập và chốt kết quả.'
+                : 'Backend tự khóa cược khi hết giờ. Admin có thể tiếp quản phiên đã khóa để nhập kết quả.',
+            style: const TextStyle(
+              color: Color(0xffd8c3ad),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          if (status == 'open' || status == 'locked') ...[
+            const SizedBox(height: 10),
+            ValueListenableBuilder<DateTime>(
+              valueListenable: now,
+              builder: (context, time, _) {
+                final deadline = _roundDeadline(round);
+                final secondsLeft = deadline?.difference(time).inSeconds;
+                final value = secondsLeft == null
+                    ? '--:--'
+                    : _countdownText(secondsLeft);
+                final open = status == 'open';
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff0b0e14),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color:
+                          (open
+                                  ? const Color(0xffffb3ad)
+                                  : const Color(0xff56e5a9))
+                              .withValues(alpha: .3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        open ? Icons.hourglass_top : Icons.lock_clock,
+                        color: open
+                            ? const Color(0xffffb3ad)
+                            : const Color(0xff56e5a9),
+                        size: 19,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          open ? 'ĐẾM NGƯỢC ĐẶT CƯỢC' : 'PHIÊN ĐÃ KHÓA',
+                          style: const TextStyle(
+                            color: Color(0xffd8c3ad),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .5,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          color: open
+                              ? const Color(0xffffb3ad)
+                              : const Color(0xff56e5a9),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+          if (status == 'settled') ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Phiên đã chốt. Backend không cho sửa lại kết quả hoặc thanh toán đã hoàn tất.',
+              style: TextStyle(color: Color(0xffa5a6ae), fontSize: 12),
+            ),
+          ],
+          if (status == 'open' || status == 'locked') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              maxLength: 300,
+              style: const TextStyle(color: Color(0xffe1e2eb)),
+              decoration: const InputDecoration(
+                labelText: 'Lý do thao tác (5–300 ký tự)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+          if (!adminMode && status == 'locked')
+            FilledButton.icon(
+              onPressed: busy || offline ? null : () => intervene(roundId),
+              icon: const Icon(Icons.tune),
+              label: Text(
+                status == 'locked'
+                    ? 'Tiếp quản để nhập kết quả'
+                    : 'Tiếp quản phiên này',
+              ),
+            ),
+          if (adminMode && status == 'locked') ...[
+            const SizedBox(height: 4),
+            TextField(
+              controller: result,
+              style: const TextStyle(color: Color(0xffe1e2eb)),
+              decoration: InputDecoration(
+                labelText: widget.game.resultHint,
+                helperText:
+                    'Nhập kết quả theo thứ tự; ví dụ: ${widget.game.id == 'bau_cua'
+                        ? 'nai,bau,ga'
+                        : widget.game.id == 'xoc_xoc'
+                        ? '0,1,0,1'
+                        : '2,3,6'}',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: busy || offline ? null : () => settle(roundId),
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Chốt kết quả phiên'),
+            ),
+          ],
+          if (status == 'open' || status == 'locked')
+            TextButton.icon(
+              onPressed: busy || offline
+                  ? null
+                  : () {
+                      if (reason.text.trim().length < 5 ||
+                          reason.text.length > 300) {
+                        setState(
+                          () => message = 'Nhập lý do từ 5 đến 300 ký tự.',
+                        );
+                      } else {
+                        call('cancelRound', {
+                          'roundId': roundId,
+                          'reason': reason.text.trim(),
+                        });
+                      }
+                    },
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Hủy phiên và hoàn cược'),
+            ),
+          if (status == 'open' || status == 'locked')
+            RoundBets(roundId: roundId),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor:
@@ -301,7 +499,9 @@ class _RoundScreenState extends State<RoundScreen> {
             widget.game.id == 'xoc_xoc'
         ? const Color(0xff10131a)
         : null,
-    appBar: widget.game.id == 'tai_xiu' || widget.game.id == 'xoc_xoc'
+    appBar:
+        !widget.isAdmin &&
+            (widget.game.id == 'tai_xiu' || widget.game.id == 'xoc_xoc')
         ? null
         : AppBar(
             backgroundColor:
@@ -317,14 +517,17 @@ class _RoundScreenState extends State<RoundScreen> {
                 ? const Color(0xffe1e2eb)
                 : null,
             title: Text(
-              widget.game.id == 'tai_xiu'
+              widget.isAdmin
+                  ? 'ADMIN • ${widget.game.title}'
+                  : widget.game.id == 'tai_xiu'
                   ? 'TÀI XỈU • XU ẢO'
                   : widget.game.title,
             ),
             actions:
-                widget.game.id == 'tai_xiu' ||
-                    widget.game.id == 'bau_cua' ||
-                    widget.game.id == 'xoc_xoc'
+                !widget.isAdmin &&
+                    (widget.game.id == 'tai_xiu' ||
+                        widget.game.id == 'bau_cua' ||
+                        widget.game.id == 'xoc_xoc')
                 ? [
                     IconButton(
                       tooltip: 'Âm thanh',
@@ -353,7 +556,8 @@ class _RoundScreenState extends State<RoundScreen> {
                 : null,
           ),
     bottomNavigationBar:
-        widget.game.id == 'tai_xiu' || widget.game.id == 'xoc_xoc'
+        !widget.isAdmin &&
+            (widget.game.id == 'tai_xiu' || widget.game.id == 'xoc_xoc')
         ? NavigationBar(
             backgroundColor: const Color(0xff0b0e14),
             indicatorColor: const Color(0x33ffc174),
@@ -551,20 +755,21 @@ class _RoundScreenState extends State<RoundScreen> {
                             ValueListenableBuilder<DateTime>(
                               valueListenable: now,
                               builder: (context, time, _) {
-                                final closesAt = round['closesAt'];
-                                final seconds = closesAt is Timestamp
-                                    ? (closesAt
-                                                  .toDate()
+                                final deadline = _roundDeadline(round);
+                                final seconds = deadline == null
+                                    ? null
+                                    : (deadline
                                                   .difference(time)
                                                   .inMilliseconds /
                                               1000)
-                                          .ceil()
-                                    : null;
-                                if (!adminMode &&
-                                    status != 'settled' &&
-                                    status != 'cancelled' &&
-                                    closesAt is Timestamp &&
-                                    !closesAt.toDate().isAfter(time)) {
+                                          .ceil();
+                                final playerCanAdvance =
+                                    status == 'open' ||
+                                    (!adminMode && status == 'locked');
+                                if (!widget.isAdmin &&
+                                    playerCanAdvance &&
+                                    deadline != null &&
+                                    !deadline.isAfter(time)) {
                                   WidgetsBinding.instance.addPostFrameCallback((
                                     _,
                                   ) {
@@ -577,12 +782,14 @@ class _RoundScreenState extends State<RoundScreen> {
                                 );
                               },
                             ),
-                            if (widget.game.id != 'xoc_xoc' &&
+                            if ((widget.game.id != 'xoc_xoc' ||
+                                    widget.isAdmin) &&
                                 round['result'] != null)
                               Text(
                                 'Kết quả: ${(round['result'] as List).join(', ')}',
                               ),
-                            if (widget.game.id != 'xoc_xoc' &&
+                            if ((widget.game.id != 'xoc_xoc' ||
+                                    widget.isAdmin) &&
                                 round['outcome'] is Map)
                               Text(
                                 'Diễn giải: ${formatOutcome(widget.game, round['outcome'] as Map)}',
@@ -591,7 +798,15 @@ class _RoundScreenState extends State<RoundScreen> {
                               const Text(
                                 'Phiên đã hủy; cược được hoàn theo máy chủ.',
                               ),
-                            if (widget.game.id == 'tai_xiu')
+                            if (widget.isAdmin)
+                              _adminRoundControls(
+                                roundId: id,
+                                round: round,
+                                status: status,
+                                adminMode: adminMode,
+                                offline: offline,
+                              ),
+                            if (!widget.isAdmin && widget.game.id == 'tai_xiu')
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
@@ -699,7 +914,8 @@ class _RoundScreenState extends State<RoundScreen> {
                                       },
                                     ),
                               )
-                            else if (widget.game.id == 'bau_cua')
+                            else if (!widget.isAdmin &&
+                                widget.game.id == 'bau_cua')
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
@@ -798,7 +1014,8 @@ class _RoundScreenState extends State<RoundScreen> {
                                       },
                                     ),
                               )
-                            else if (widget.game.id == 'xoc_xoc')
+                            else if (!widget.isAdmin &&
+                                widget.game.id == 'xoc_xoc')
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
@@ -888,7 +1105,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                       },
                                     ),
                               )
-                            else ...[
+                            else if (!widget.isAdmin) ...[
                               const SizedBox(height: 12),
                               TextField(
                                 controller: amount,
@@ -951,109 +1168,36 @@ class _RoundScreenState extends State<RoundScreen> {
                                 ),
                               ),
                             ],
-                            if (widget.game.id == 'bau_cua' ||
-                                widget.game.id == 'tai_xiu')
+                            if (!widget.isAdmin &&
+                                (widget.game.id == 'bau_cua' ||
+                                    widget.game.id == 'tai_xiu'))
                               RoundHistory(game: widget.game),
-                            StreamBuilder<
-                              DocumentSnapshot<Map<String, dynamic>>
-                            >(
-                              key: ValueKey('bet_$id'),
-                              stream: FirebaseFirestore.instance
-                                  .doc('rounds/$id/bets/${widget.uid}')
-                                  .snapshots(),
-                              builder: (context, bet) {
-                                if (bet.hasError) {
-                                  return Text(
-                                    'Không tải được cược của bạn: ${bet.error}',
-                                  );
-                                }
-                                if (!bet.hasData) {
-                                  return const Text('Đang tải cược của bạn…');
-                                }
-                                final data = bet.data!.data();
-                                return Text(
-                                  data == null
-                                      ? 'Bạn chưa cược phiên này.'
-                                      : 'Cược của bạn: ${data['stakes']} • ${data['amount']} xu '
-                                            '• Ghi có: ${data['credit'] ?? 'chờ kết quả'}',
-                                );
-                              },
-                            ),
-                            if (widget.isAdmin) ...[
-                              const Divider(),
-                              TextField(
-                                controller: reason,
-                                maxLength: 300,
-                                decoration: const InputDecoration(
-                                  labelText: 'Lý do (5–300 ký tự)',
-                                ),
-                              ),
-                              if (status == 'open')
-                                ValueListenableBuilder<DateTime>(
-                                  valueListenable: now,
-                                  builder: (context, time, _) {
-                                    final deadline = round['closesAt'];
-                                    return OutlinedButton(
-                                      onPressed:
-                                          busy ||
-                                              offline ||
-                                              deadline is! Timestamp ||
-                                              deadline.toDate().isAfter(time)
-                                          ? null
-                                          : () => call('lockRound', {
-                                              'roundId': id,
-                                            }),
-                                      child: const Text('Khóa cược (sau hạn)'),
+                            if (!widget.isAdmin)
+                              StreamBuilder<
+                                DocumentSnapshot<Map<String, dynamic>>
+                              >(
+                                key: ValueKey('bet_$id'),
+                                stream: FirebaseFirestore.instance
+                                    .doc('rounds/$id/bets/${widget.uid}')
+                                    .snapshots(),
+                                builder: (context, bet) {
+                                  if (bet.hasError) {
+                                    return Text(
+                                      'Không tải được cược của bạn: ${bet.error}',
                                     );
-                                  },
-                                ),
-                              if (!adminMode && status == 'locked')
-                                OutlinedButton.icon(
-                                  onPressed: busy || offline
-                                      ? null
-                                      : () => intervene(id),
-                                  icon: const Icon(Icons.tune),
-                                  label: const Text(
-                                    'Chọn kết quả admin cho phiên đã khóa',
-                                  ),
-                                ),
-                              if (adminMode && status == 'locked') ...[
-                                TextField(
-                                  controller: result,
-                                  decoration: InputDecoration(
-                                    labelText: widget.game.resultHint,
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                ),
-                                FilledButton(
-                                  onPressed: busy || offline
-                                      ? null
-                                      : () => settle(id),
-                                  child: const Text('Chốt kết quả'),
-                                ),
-                              ],
-                              if (status == 'open' || status == 'locked')
-                                OutlinedButton(
-                                  onPressed: busy || offline
-                                      ? null
-                                      : () {
-                                          if (reason.text.trim().length < 5 ||
-                                              reason.text.length > 300) {
-                                            setState(
-                                              () => message =
-                                                  'Nhập lý do từ 5 đến 300 ký tự.',
-                                            );
-                                          } else {
-                                            call('cancelRound', {
-                                              'roundId': id,
-                                              'reason': reason.text.trim(),
-                                            });
-                                          }
-                                        },
-                                  child: const Text('Hủy phiên'),
-                                ),
-                              RoundBets(roundId: id),
-                            ],
+                                  }
+                                  if (!bet.hasData) {
+                                    return const Text('Đang tải cược của bạn…');
+                                  }
+                                  final data = bet.data!.data();
+                                  return Text(
+                                    data == null
+                                        ? 'Bạn chưa cược phiên này.'
+                                        : 'Cược của bạn: ${data['stakes']} • ${data['amount']} xu '
+                                              '• Ghi có: ${data['credit'] ?? 'chờ kết quả'}',
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ),

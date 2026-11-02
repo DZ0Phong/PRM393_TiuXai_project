@@ -14,6 +14,8 @@ import 'app_settings_screen.dart';
 import 'terms_of_use_screen.dart';
 import 'privacy_policy_screen.dart';
 import '../auth/otp_verification_screen.dart';
+import '../leaderboard/leaderboard_screen.dart';
+import 'point_activity_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final User user;
@@ -229,6 +231,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
+                ),
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(this.context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            LeaderboardScreen(functions: _functions),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('Mở bảng xếp hạng đầy đủ'),
                 ),
               ],
             ),
@@ -1331,128 +1347,152 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildOperationsLedger(List<Map<String, dynamic>> ops) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xff1d2026),
+    return Material(
+      color: const Color(0xff1d2026),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x1affffff)),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PointActivityScreen(userId: widget.user.uid),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0x1affffff)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.receipt_long, color: Color(0xffffc174), size: 18),
-                  SizedBox(width: 6),
-                  Text(
-                    'Biến Động Số Dư Gần Nhất',
-                    style: TextStyle(
-                      color: Color(0xffe1e2eb),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
+                children: [
+                  const Icon(
+                    Icons.receipt_long,
+                    color: Color(0xffffc174),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 7),
+                  const Expanded(
+                    child: Text(
+                      'Biến động số dư gần nhất',
+                      style: TextStyle(
+                        color: Color(0xffe1e2eb),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
+                  Text(
+                    '${ops.length} bản ghi',
+                    style: const TextStyle(
+                      color: Color(0xffa08e7a),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, color: Color(0xffa08e7a)),
                 ],
               ),
-              Text(
-                '${ops.length} bản ghi',
-                style: const TextStyle(color: Color(0xffa08e7a), fontSize: 11),
+              const SizedBox(height: 4),
+              const Text(
+                'Hoạt động điểm của tôi · Chạm để xem sổ điểm đầy đủ',
+                style: TextStyle(color: Color(0xffa08e7a), fontSize: 11),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (ops.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: Text(
-                  'Chưa có giao dịch nào được ghi nhận.',
-                  style: TextStyle(color: Color(0xffa08e7a), fontSize: 12),
-                ),
-              ),
-            )
-          else
-            ...ops.take(8).map((op) {
-              final kind = op['kind']?.toString() ?? 'Giao dịch';
-              final delta = (op['delta'] as num?)?.toInt() ?? 0;
-              final balanceAfter = op['balance'];
-              final roundId = op['roundId'] ?? '';
-              final isPositive = delta >= 0;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xff272a31).withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: isPositive
-                          ? const Color(0xff56e5a9)
-                          : const Color(0xffffb4ab),
-                      size: 16,
+              const SizedBox(height: 10),
+              if (ops.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text(
+                      'Chưa có giao dịch nào được ghi nhận.',
+                      style: TextStyle(color: Color(0xffa08e7a), fontSize: 12),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatKind(kind),
-                            style: const TextStyle(
-                              color: Color(0xffe1e2eb),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  ),
+                )
+              else
+                ...ops.take(8).map((op) {
+                  final kind = op['kind']?.toString() ?? 'Giao dịch';
+                  final delta = (op['delta'] as num?)?.toInt() ?? 0;
+                  final balanceAfter = op['balance'];
+                  final roundId = op['roundId'] ?? '';
+                  final isPositive = delta >= 0;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xff272a31).withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isPositive
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          color: isPositive
+                              ? const Color(0xff56e5a9)
+                              : const Color(0xffffb4ab),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _formatKind(kind),
+                                style: const TextStyle(
+                                  color: Color(0xffe1e2eb),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (roundId.toString().isNotEmpty)
+                                Text(
+                                  'Phiên: $roundId',
+                                  style: const TextStyle(
+                                    color: Color(0xffa08e7a),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                            ],
                           ),
-                          if (roundId.toString().isNotEmpty)
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
                             Text(
-                              'Phiên: $roundId',
+                              '${isPositive ? '+' : ''}$delta xu',
+                              style: TextStyle(
+                                color: isPositive
+                                    ? const Color(0xff56e5a9)
+                                    : const Color(0xffffb4ab),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Dư: ${balanceAfter ?? '—'} xu',
                               style: const TextStyle(
                                 color: Color(0xffa08e7a),
                                 fontSize: 10,
                               ),
                             ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${isPositive ? '+' : ''}$delta xu',
-                          style: TextStyle(
-                            color: isPositive
-                                ? const Color(0xff56e5a9)
-                                : const Color(0xffffb4ab),
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Dư: ${balanceAfter ?? '—'} xu',
-                          style: const TextStyle(
-                            color: Color(0xffa08e7a),
-                            fontSize: 10,
-                          ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              );
-            }),
-        ],
+                  );
+                }),
+            ],
+          ),
+        ),
       ),
     );
   }

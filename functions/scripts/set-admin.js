@@ -1,3 +1,4 @@
+
 // Chỉ chạy bằng tài khoản dịch vụ tin cậy, tuyệt đối không đưa key vào Git.
 const {initializeApp}=require('firebase-admin/app');const {getAuth}=require('firebase-admin/auth');initializeApp();
 const uid=process.argv[2];if(!uid)throw Error('node scripts/set-admin.js UID [revoke]');

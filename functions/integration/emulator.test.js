@@ -6,18 +6,22 @@ const {initializeTestEnvironment, assertFails, assertSucceeds} = require('@fireb
 const {initializeApp, deleteApp} = require('firebase/app');
 const {getAuth, connectAuthEmulator, createUserWithEmailAndPassword} = require('firebase/auth');
 const {getFunctions, connectFunctionsEmulator, httpsCallable} = require('firebase/functions');
-const {doc, setDoc, getDoc, collection, getDocs, query, where, orderBy, limit} = require('firebase/firestore');
+const {doc, setDoc, getDoc, collection, getDocs, query, where, orderBy, limit, startAfter} = require('firebase/firestore');
 const {initializeApp: adminApp} = require('firebase-admin/app');
 const {getAuth: adminAuth} = require('firebase-admin/auth');
 const {getFirestore, Timestamp} = require('firebase-admin/firestore');
 const projectId = 'demo-tai-xiu';
+const testPort = (key, fallback) => Number(process.env[key] || fallback);
+const firestorePort = testPort('TEST_FIRESTORE_PORT', 8080);
+const authPort = testPort('TEST_AUTH_PORT', 9099);
+const functionsPort = testPort('TEST_FUNCTIONS_PORT', 5001);
 
 test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () => {
-  const env = await initializeTestEnvironment({projectId, firestore: {host: '127.0.0.1', port: 8080, rules: fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8')}});
+  const env = await initializeTestEnvironment({projectId, firestore: {host: '127.0.0.1', port: firestorePort, rules: fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8')}});
   try {
     await env.withSecurityRulesDisabled(async (c) => {
-      await setDoc(doc(c.firestore(), 'users/alice'), {balance: 100});
-      await setDoc(doc(c.firestore(), 'users/locked'), {balance: 100, blocked: true});
+      await setDoc(doc(c.firestore(), 'users/alice'), {balance: 100, createdAt: new Date(1)});
+      await setDoc(doc(c.firestore(), 'users/locked'), {balance: 100, blocked: true, createdAt: new Date(2)});
       await setDoc(doc(c.firestore(), 'rounds/rule-test'), {status: 'open'});
       await setDoc(doc(c.firestore(), 'rounds/settled-test'), {game: 'tai_xiu', status: 'settled', settledAt: new Date(), result: [6, 6, 6], outcome: {side: 'tai', total: 18}});
       await setDoc(doc(c.firestore(), 'rounds/rule-test/bets/alice'), {amount: 10});
@@ -26,6 +30,10 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
       await setDoc(doc(c.firestore(), 'cardTables/card-test/hands/alice'), {cards: ['AS', 'AH']});
       await setDoc(doc(c.firestore(), 'cardSecrets/card-test'), {state: {hands: {alice: ['AS', 'AH']}}});
       await setDoc(doc(c.firestore(), 'cardBotPool/global'), {uids: ['private-bot-id']});
+      const logs = Array.from({length: 25}, (_, i) => setDoc(doc(c.firestore(), `auditLogs/page-${i.toString().padStart(2, '0')}`), {
+        actor: 'boss', action: 'TEST', details: {index: i}, at: new Date(1000 + i),
+      }));
+      await Promise.all(logs);
     });
     const alice = env.authenticatedContext('alice').firestore();
     const bob = env.authenticatedContext('bob').firestore();
@@ -34,11 +42,20 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
     await assertSucceeds(getDoc(doc(alice, 'users/alice')));
     await assertFails(getDoc(doc(bob, 'users/alice')));
     await assertSucceeds(getDoc(doc(admin, 'users/alice')));
+    const adminPlayers = await assertSucceeds(getDocs(query(collection(admin, 'users'), orderBy('createdAt', 'desc'), limit(50))));
+    assert.ok(adminPlayers.docs.some((player) => player.id === 'alice'));
+    await assertFails(getDocs(query(collection(alice, 'users'), orderBy('createdAt', 'desc'), limit(50))));
     await assertFails(setDoc(doc(alice, 'users/alice'), {balance: 999999}));
     await assertFails(setDoc(doc(admin, 'auditLogs/test'), {action: 'EDIT'}));
     await assertFails(getDoc(doc(alice, 'auditLogs/test')));
     await assertSucceeds(getDoc(doc(admin, 'auditLogs/test')));
     await assertFails(getDoc(doc(anon, 'auditLogs/test')));
+    const firstAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), orderBy('at', 'desc'), limit(20))));
+    assert.equal(firstAuditPage.docs.length, 20);
+    assert.equal(firstAuditPage.docs[0].data().details.index, 24);
+    const secondAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), orderBy('at', 'desc'), startAfter(firstAuditPage.docs.at(-1)), limit(20))));
+    assert.equal(secondAuditPage.docs.length, 5);
+    await assertFails(getDocs(query(collection(alice, 'auditLogs'), orderBy('at', 'desc'), limit(20))));
     await assertFails(getDoc(doc(bob, 'rounds/rule-test/bets/alice')));
     await assertSucceeds(getDoc(doc(bob, 'cardTables/card-test')));
     await assertSucceeds(getDoc(doc(alice, 'cardTables/card-test/hands/alice')));
@@ -62,8 +79,8 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
   const app = adminApp({projectId}); const db = getFirestore(app); const apps = [];
   async function client(i) {
     const a = initializeApp({projectId, apiKey: 'demo-key', appId: 'demo'}, `test-${i}-${Date.now()}`); apps.push(a);
-    const auth = getAuth(a); connectAuthEmulator(auth, 'http://127.0.0.1:9099', {disableWarnings: true});
-    const f = getFunctions(a, 'asia-southeast1'); connectFunctionsEmulator(f, '127.0.0.1', 5001);
+    const auth = getAuth(a); connectAuthEmulator(auth, `http://127.0.0.1:${authPort}`, {disableWarnings: true});
+    const f = getFunctions(a, 'asia-southeast1'); connectFunctionsEmulator(f, '127.0.0.1', functionsPort);
     const {user} = await createUserWithEmailAndPassword(auth, `test${i}-${Date.now()}@example.com`, 'password123');
     return {user, call: async (name, data = {}) => (await httpsCallable(f, name)(data)).data};
   }
@@ -87,8 +104,10 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       if (game === 'bau_cua') await p.call('placeBet', {roundId, side: 'bau', amount: 1000, requestId: 'second-bau'});
       await assert.rejects(boss.call('settleRound', {roundId, result, reason: 'Bài kiểm thử'}));
       await db.doc(`rounds/${roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-      await assert.rejects(p.call('lockRound', {roundId}));
-      await boss.call('lockRound', {roundId}); await boss.call('lockRound', {roundId});
+      const firstLock = await p.call('advanceRandomRound', {roundId});
+      assert.equal(firstLock.status, 'locked');
+      const repeatedLock = await p.call('advanceRandomRound', {roundId});
+      assert.equal(repeatedLock.status, 'locked');
       await assert.rejects(p.call('settleRound', {roundId, result, reason: 'Không có quyền'}));
       await assert.rejects(boss.call('settleRound', {roundId, result: [9, 9, 9], reason: 'Không hợp lệ'}));
       await Promise.all([1, 2].map(() => boss.call('settleRound', {roundId, result, reason: 'Bài kiểm thử'})));
@@ -102,7 +121,7 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const {roundId: cancelled} = await boss.call('startRound', {game: 'tai_xiu', mode: 'admin'});
     await p.call('placeBet', {roundId: cancelled, side: 'xiu', amount: 1000, requestId: 'cancel-first'});
     await db.doc(`rounds/${cancelled}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-    await boss.call('lockRound', {roundId: cancelled});
+    await p.call('advanceRandomRound', {roundId: cancelled});
     const beforeRefund = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
     await db.doc(`users/${p.user.uid}`).update({balance: Number.MAX_SAFE_INTEGER});
     await assert.rejects(boss.call('cancelRound', {roundId: cancelled, reason: 'Không thể hoàn điểm tràn số'}));
@@ -115,7 +134,7 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     await assert.rejects(boss.call('settleRound', {roundId: cancelled, result: [2, 3, 6], reason: 'Không chốt đã hủy'}));
     const random = await boss.call('startRound', {game: 'bau_cua', mode: 'random'});
     await db.doc(`rounds/${random.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-    await boss.call('lockRound', {roundId: random.roundId});
+    await p.call('advanceRandomRound', {roundId: random.roundId});
     await boss.call('settleRound', {roundId: random.roundId});
     assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().result.length, 3);
     const logs = await db.collection('auditLogs').where('action', '==', 'SETTLE').get();
@@ -130,7 +149,7 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     await db.doc(`rounds/${race.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     const late = await client(3); await late.call('ensureProfile');
     await assert.rejects(late.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 1000, requestId: 'race-late'}));
-    await boss.call('lockRound', {roundId: race.roundId});
+    await p.call('advanceRandomRound', {roundId: race.roundId});
     const raced = await Promise.allSettled([
       boss.call('cancelRound', {roundId: race.roundId, reason: 'Hủy cùng thời điểm'}),
       boss.call('settleRound', {roundId: race.roundId, result: [2, 3, 6], reason: 'Chốt cùng thời điểm'}),
@@ -158,4 +177,67 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     assert.ok(ranking.some((row) => row.nickname === `Bạn ${p.user.uid.slice(0, 6)}`));
     assert.ok(ranking.every((row) => row.balance < 100000));
   } finally { await Promise.all(apps.map(deleteApp)); }
+});
+
+test('callable player management: point adjustment, account lock and audit', async () => {
+  const app = adminApp({projectId}, `player-management-${Date.now()}`);
+  const db = getFirestore(app);
+  const apps = [];
+  async function client(label) {
+    const a = initializeApp({projectId, apiKey: 'demo-key', appId: 'demo'}, `players-${label}-${Date.now()}`);
+    apps.push(a);
+    const auth = getAuth(a);
+    connectAuthEmulator(auth, `http://127.0.0.1:${authPort}`, {disableWarnings: true});
+    const functions = getFunctions(a, 'asia-southeast1');
+    connectFunctionsEmulator(functions, '127.0.0.1', functionsPort);
+    const {user} = await createUserWithEmailAndPassword(auth, `player-${label}-${Date.now()}@example.com`, 'password123');
+    return {user, call: async (name, data = {}) => (await httpsCallable(functions, name)(data)).data};
+  }
+  try {
+    const admin = await client('admin');
+    await adminAuth(app).setCustomUserClaims(admin.user.uid, {admin: true});
+    await admin.user.getIdToken(true);
+    await admin.call('ensureProfile');
+    const player = await client('target');
+    await player.call('ensureProfile');
+    const target = db.doc(`users/${player.user.uid}`);
+    const initial = (await target.get()).data().balance;
+
+    const positive = {uid: player.user.uid, delta: 1000, reason: 'Bù lỗi phiên test', requestId: 'player-adjust-positive'};
+    const first = await admin.call('adjustBalance', positive);
+    const retry = await admin.call('adjustBalance', positive);
+    assert.equal(first.balance, initial + 1000);
+    assert.equal(retry.balance, initial + 1000);
+    await assert.rejects(admin.call('adjustBalance', {...positive, delta: 900}));
+
+    const negative = await admin.call('adjustBalance', {
+      uid: player.user.uid, delta: -500, reason: 'Thu hồi điểm test', requestId: 'player-adjust-negative',
+    });
+    assert.equal(negative.balance, initial + 500);
+    await assert.rejects(admin.call('adjustBalance', {
+      uid: player.user.uid, delta: 100001, reason: 'Vượt hạn mức backend', requestId: 'player-adjust-too-large',
+    }));
+    assert.equal((await target.get()).data().balance, initial + 500);
+
+    await assert.rejects(admin.call('setPlayerBlocked', {
+      uid: admin.user.uid, blocked: true, reason: 'Tự khóa thử nghiệm',
+    }));
+    await admin.call('setPlayerBlocked', {
+      uid: player.user.uid, blocked: true, reason: 'Tạm khóa kiểm thử',
+    });
+    assert.equal((await target.get()).data().blocked, true);
+    await assert.rejects(player.call('ensureProfile'));
+    await admin.call('setPlayerBlocked', {
+      uid: player.user.uid, blocked: false, reason: 'Mở khóa kiểm thử',
+    });
+    assert.equal((await target.get()).data().blocked, false);
+    await player.call('ensureProfile');
+
+    const events = await db.collection('auditLogs').where('details.uid', '==', player.user.uid).get();
+    assert.ok(events.docs.some((doc) => doc.data().action === 'ADJUST_BALANCE'));
+    assert.ok(events.docs.some((doc) => doc.data().action === 'BLOCK_PLAYER'));
+    assert.ok(events.docs.some((doc) => doc.data().action === 'UNBLOCK_PLAYER'));
+  } finally {
+    await Promise.all(apps.map(deleteApp));
+  }
 });
