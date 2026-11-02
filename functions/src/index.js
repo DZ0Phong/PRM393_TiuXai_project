@@ -31,9 +31,9 @@ const allowedGame = (value) => {
 const automaticGames = ['tai_xiu', 'bau_cua', 'xoc_xoc'];
 const ROUND_SECONDS = 30;
 const RESULT_REVEAL_SECONDS = 6;
-// Keep a short post-lock window so an admin can choose a result. Unintervened
-// rounds still settle automatically after the window.
-const ADMIN_INTERVENTION_SECONDS = 5;
+// Keep locked random rounds available long enough for an administrator to
+// take over and enter a result. Untouched rounds still settle automatically.
+const ADMIN_INTERVENTION_SECONDS = 60;
 
 function emptyBetStats(game) {
   const sides = games.games[game].sides;
@@ -65,13 +65,6 @@ async function ensureAutomaticRound(game, actor) {
     if (currentSnap?.exists) {
       const current = currentSnap.data();
       if (!['settled', 'cancelled'].includes(current.status)) {
-        // Upgrade legacy sessions that were manually started in admin mode.
-        // New manual overrides carry intervenedAt and remain admin-controlled.
-        if (current.mode === 'admin' && !current.intervenedAt) {
-          tx.update(currentRef, {mode: 'random', autoModeMigratedAt: now()});
-          audit(tx, actor, 'AUTO_MODE_MIGRATE', {game, roundId: currentId});
-          return {roundId: currentId, status: current.status, created: false, migrated: true};
-        }
         return {roundId: currentId, status: current.status, created: false};
       }
       const finishedAt = current.settledAt?.toMillis?.() ?? current.cancelledAt?.toMillis?.();
@@ -341,7 +334,13 @@ async function lock(roundId, actor) {
     return {status: 'locked'};
   });
 }
-exports.lockRound = call(async (req) => { admin(req); return lock(id(req.data?.roundId), req.auth.uid); });
+// Preserve the callable for player clients that advance an expired betting
+// session directly. Admins cannot use this manual lock action.
+exports.lockRound = call(async (req) => {
+  if (req.auth.token.admin === true)
+    throw new HttpsError('permission-denied', 'Admin không khóa phiên thủ công');
+  return lock(id(req.data?.roundId), 'scheduler');
+});
 
 exports.interveneRound = call(async (req) => {
   admin(req);
@@ -399,13 +398,13 @@ exports.settleRound = call(async (req) => {
   const roundId = id(req.data?.roundId);
   return settle(roundId, req.auth.uid, req.data?.result, req.data?.reason);
 });
-// Lets an authenticated player advance only an expired random round. This is
-// also used in the Emulator, where scheduled functions do not run themselves.
+// A player may advance the deadline transition after betting expires. Manual
+// rounds stay locked for the administrator; random rounds settle after the
+// intervention window. This is also used where scheduled functions do not run.
 exports.advanceRandomRound = call(async (req) => {
   const roundId = id(req.data?.roundId), ref = db.doc(`rounds/${roundId}`);
   const snap = await ref.get();
   if (!snap.exists) fail('Không có phiên');
-  if (snap.data().mode !== 'random') fail('Phiên này cần quản trị viên chốt');
   if (snap.data().status === 'settled' || snap.data().status === 'cancelled')
     return {status: snap.data().status};
   if (snap.data().status === 'open') {
@@ -414,6 +413,8 @@ exports.advanceRandomRound = call(async (req) => {
     await lock(roundId, 'scheduler');
   }
   const locked = await ref.get();
+  if (locked.data()?.mode === 'admin' && locked.data()?.status === 'locked')
+    return {status: 'locked', waiting: true, adminControlled: true};
   const lockedAt = locked.data()?.lockedAt?.toMillis?.();
   if (locked.data()?.status === 'locked' && lockedAt &&
       Date.now() < lockedAt + ADMIN_INTERVENTION_SECONDS * 1000) {

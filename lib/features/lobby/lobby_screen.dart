@@ -8,6 +8,7 @@ import 'package:flutter/material.dart' hide Text;
 import '../../core/app_text.dart';
 import '../cards/presentation/screens/card_table_screen.dart';
 import '../game/game_specs.dart';
+import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -84,61 +85,9 @@ class _LobbyState extends State<LobbyScreen> {
   }
 
   void _showLeaderboard() {
-    final ranking = widget.functions.httpsCallable('getLeaderboard').call();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 560),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Bảng xếp hạng xu ảo',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Chỉ là điểm mô phỏng, không có thưởng hay quy đổi.',
-                ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: FutureBuilder<HttpsCallableResult<dynamic>>(
-                    future: ranking,
-                    builder: (context, result) {
-                      if (result.hasError) {
-                        return Text(
-                          'Không tải được: ${widget.readableError(result.error!)}',
-                        );
-                      }
-                      if (!result.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      final rows = result.data!.data;
-                      if (rows is! List || rows.isEmpty) {
-                        return const Text('Chưa có người chơi.');
-                      }
-                      return ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final row in rows.whereType<Map>())
-                            ListTile(
-                              leading: Text('#${row['rank'] ?? '—'}'),
-                              title: Text('${row['nickname'] ?? 'Người chơi'}'),
-                              trailing: Text('${row['balance'] ?? '—'} xu'),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LeaderboardScreen(functions: widget.functions),
       ),
     );
   }
