@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Push this screen with the signed-in UID, admin claim, and 'poker' or 'ba_cay'.
@@ -413,16 +415,16 @@ class _CardTableScreenState extends State<CardTableScreen> {
                 controller: _stake,
                 enabled: _pendingCreate == null,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Ante (10–100 xu ảo)',
+                decoration: InputDecoration(
+                  labelText: appLocalizedText('Ante (10–100 xu ảo)'),
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 initialValue: _maxSeats,
-                decoration: const InputDecoration(
-                  labelText: 'Số ghế tối đa',
+                decoration: InputDecoration(
+                  labelText: appLocalizedText('Số ghế tối đa'),
                   border: OutlineInputBorder(),
                 ),
                 items: [
@@ -463,7 +465,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
         textInputAction: TextInputAction.go,
         onSubmitted: (_) => _openTypedTable(),
         decoration: InputDecoration(
-          labelText: 'Mã bàn được mời',
+          labelText: appLocalizedText('Mã bàn được mời'),
           border: const OutlineInputBorder(),
           suffixIcon: IconButton(
             tooltip: 'Mở bàn theo mã',
@@ -692,8 +694,8 @@ class _CardTableScreenState extends State<CardTableScreen> {
             TextField(
               controller: _raise,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Mức tố thêm (tối thiểu ante)',
+              decoration: InputDecoration(
+                labelText: appLocalizedText('Mức tố thêm (tối thiểu ante)'),
               ),
             ),
             Wrap(
@@ -774,7 +776,9 @@ class _CardTableScreenState extends State<CardTableScreen> {
             // Clamp local draft if a different table has fewer seats.
             key: ValueKey('bot_count_${id}_$_maxBots'),
             initialValue: _maxBots.clamp(0, maxSeats > 1 ? maxSeats - 1 : 1),
-            decoration: const InputDecoration(labelText: 'Số bot tối đa'),
+            decoration: InputDecoration(
+              labelText: appLocalizedText('Số bot tối đa'),
+            ),
             items: [
               for (var count = 0; count < maxSeats; count++)
                 DropdownMenuItem(value: count, child: Text('$count')),
@@ -813,8 +817,8 @@ class _CardTableScreenState extends State<CardTableScreen> {
           TextField(
             controller: _reason,
             maxLength: 300,
-            decoration: const InputDecoration(
-              labelText: 'Lý do hủy (5–300 ký tự)',
+            decoration: InputDecoration(
+              labelText: appLocalizedText('Lý do hủy (5–300 ký tự)'),
               border: OutlineInputBorder(),
             ),
           ),

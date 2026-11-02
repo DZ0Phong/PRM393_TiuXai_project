@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 
 const _termsBg = Color(0xff10131a);
 const _termsLow = Color(0xff191c22);

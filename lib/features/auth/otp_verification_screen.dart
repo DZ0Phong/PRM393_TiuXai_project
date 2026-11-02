@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:math';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart' hide Text;
 
-import 'package:flutter/material.dart';
+import '../../core/app_text.dart';
 
 const _otpBg = Color(0xff10131a);
 const _otpLow = Color(0xff191c22);
@@ -15,17 +17,20 @@ const _otpText = Color(0xffe1e2eb);
 const _otpMuted = Color(0xffd8c3ad);
 
 class OtpVerificationScreen extends StatefulWidget {
-  const OtpVerificationScreen({super.key});
+  final User user;
+
+  const OtpVerificationScreen({super.key, required this.user});
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  static const _initialCode = '582000';
-  String _demoCode = _initialCode;
-  String _digits = '582';
-  int _remainingSeconds = 105;
+  final _phone = TextEditingController();
+  String _digits = '';
+  String? _verificationId;
+  int? _resendToken;
+  int _remainingSeconds = 0;
   Timer? _timer;
   bool _busy = false;
   bool _verified = false;
@@ -33,17 +38,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _phone.text = widget.user.phoneNumber ?? '';
+    _verified = widget.user.phoneNumber != null;
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _phone.dispose();
     super.dispose();
   }
 
   bool get _canResend => _remainingSeconds == 0 && !_busy;
-  bool get _canVerify => _digits.length == 6 && !_busy && !_verified;
+  bool get _canVerify =>
+      _verificationId != null && _digits.length == 6 && !_busy && !_verified;
 
   void _startCountdown() {
     _timer?.cancel();
@@ -81,43 +89,122 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   Future<void> _verify() async {
     if (!_canVerify) {
-      _message('Nhập đủ 6 chữ số để kiểm tra mã demo.');
+      _message('Nhập đủ 6 chữ số trong SMS để xác minh.');
+      return;
+    }
+    final verificationId = _verificationId;
+    if (verificationId == null) {
+      _message('Hãy yêu cầu mã SMS trước khi xác minh.');
       return;
     }
     if (_remainingSeconds == 0) {
-      _message('Mã demo đã hết hạn. Hãy tạo mã demo mới.');
+      _message('Mã SMS đã hết hạn. Hãy yêu cầu gửi lại mã.');
       return;
     }
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: _digits,
+    );
+    await _linkVerifiedPhone(credential);
+  }
 
-    setState(() => _busy = true);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
+  Future<void> _sendCode({bool resend = false}) async {
+    if (_busy || _verified) return;
+    final phoneNumber = _phone.text.trim();
+    if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phoneNumber)) {
+      _message(
+        'Nhập số điện thoại theo định dạng quốc tế, ví dụ +84901234567.',
+      );
+      return;
+    }
     setState(() {
-      _busy = false;
-      _verified = _digits == _demoCode;
+      _busy = true;
+      _verificationId = null;
+      _digits = '';
     });
-    if (_verified) {
-      _message('Mã demo đúng. Số điện thoại chưa được xác minh bởi Firebase.');
-    } else {
-      _message('Mã demo không khớp. Hãy kiểm tra mã hiển thị trên màn hình.');
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        forceResendingToken: resend ? _resendToken : null,
+        timeout: const Duration(seconds: 105),
+        verificationCompleted: (credential) {
+          _linkVerifiedPhone(credential);
+        },
+        verificationFailed: (error) {
+          if (!mounted) return;
+          setState(() => _busy = false);
+          _message(
+            error.message ??
+                'Firebase Auth không gửi được SMS (${error.code}).',
+          );
+        },
+        codeSent: (verificationId, resendToken) {
+          if (!mounted) return;
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _digits = '';
+            _remainingSeconds = 105;
+            _busy = false;
+          });
+          _startCountdown();
+          _message('Firebase Auth đã gửi mã xác minh đến $phoneNumber.');
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          _verificationId = verificationId;
+        },
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _message(error.message ?? 'Lỗi Firebase Auth: ${error.code}.');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _message('Không thể gửi mã xác minh: $error');
     }
   }
 
-  Future<void> _resendDemoCode() async {
-    if (!_canResend) return;
-    setState(() => _busy = true);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
-    final nextCode = (100000 + Random().nextInt(900000)).toString();
-    setState(() {
-      _demoCode = nextCode;
-      _digits = '';
-      _remainingSeconds = 105;
-      _busy = false;
-      _verified = false;
-    });
-    _startCountdown();
-    _message('Mã OTP demo mới: $nextCode • không gửi SMS/Telegram.');
+  Future<void> _linkVerifiedPhone(PhoneAuthCredential credential) async {
+    if (_busy && _verified) return;
+    if (mounted) setState(() => _busy = true);
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || currentUser.uid != widget.user.uid) {
+        throw FirebaseAuthException(
+          code: 'user-mismatch',
+          message: 'Phiên đăng nhập đã thay đổi. Hãy đăng nhập lại.',
+        );
+      }
+      final linked = await currentUser.linkWithCredential(credential);
+      await linked.user?.getIdToken(true);
+      try {
+        await FirebaseFunctions.instanceFor(
+          region: 'asia-southeast1',
+        ).httpsCallable('syncVerifiedPhoneNumber').call();
+      } catch (error) {
+        // Auth is the source of truth; a profile sync can be retried later.
+        if (mounted) {
+          _message(
+            'Số điện thoại đã xác minh trong Firebase Auth. Hồ sơ chưa đồng bộ: $error',
+          );
+        }
+      }
+      if (!mounted) return;
+      setState(() => _verified = true);
+      _message('Số điện thoại đã được xác minh và liên kết với tài khoản.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      final message = error.code == 'credential-already-in-use'
+          ? 'Số điện thoại này đã liên kết với tài khoản khác.'
+          : error.message ??
+                'Không xác minh được số điện thoại (${error.code}).';
+      _message(message);
+    } catch (error) {
+      if (mounted) _message('Không thể liên kết số điện thoại: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   void _message(String text) {
@@ -131,29 +218,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
-  }
-
-  void _showContactNotConfigured() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _otpSurface,
-        title: const Text(
-          'Không có số điện thoại liên kết',
-          style: TextStyle(color: _otpGold),
-        ),
-        content: const Text(
-          'Bản demo chỉ đăng nhập bằng email/mật khẩu. Không có SMS, Telegram hoặc số điện thoại để đổi nhận mã.',
-          style: TextStyle(color: _otpText, height: 1.45),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Đóng'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -176,7 +240,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               Icon(Icons.verified_user_outlined, color: _otpGold, size: 14),
               SizedBox(width: 5),
               Text(
-                'BẢO MẬT • BẢN DEMO',
+                'XÁC MINH QUA FIREBASE AUTH',
                 style: TextStyle(
                   color: _otpGold,
                   fontSize: 9,
@@ -309,7 +373,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   Widget _buildTargetInfo() => Column(
     children: [
       const Text(
-        'Xác Thực Mã OTP',
+        'Xác Thực Số Điện Thoại',
         textAlign: TextAlign.center,
         style: TextStyle(
           color: _otpText,
@@ -319,45 +383,52 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ),
       const SizedBox(height: 5),
       const Text(
-        'Đây là mã mô phỏng trên giao diện. Project chưa gửi OTP qua SMS hoặc Telegram.',
+        'Firebase Auth gửi mã SMS để xác minh và liên kết số điện thoại với tài khoản đang đăng nhập.',
         textAlign: TextAlign.center,
         style: TextStyle(color: _otpMuted, fontSize: 11, height: 1.45),
       ),
-      const SizedBox(height: 9),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-        decoration: BoxDecoration(
-          color: _otpLow,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Mã demo: $_demoCode',
-              style: const TextStyle(
-                color: _otpGold,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _showContactNotConfigured,
-              icon: const Icon(Icons.swap_horiz, size: 15),
-              label: const Text('Đổi liên hệ', style: TextStyle(fontSize: 9)),
-              style: TextButton.styleFrom(
-                foregroundColor: _otpGold,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+      const SizedBox(height: 12),
+      TextField(
+        controller: _phone,
+        enabled: !_verified && !_busy,
+        keyboardType: TextInputType.phone,
+        style: const TextStyle(color: _otpText, fontSize: 14),
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.phone_android, color: _otpGold),
+          hintText: '+84901234567',
+          hintStyle: TextStyle(color: _otpMuted.withValues(alpha: .65)),
+          filled: true,
+          fillColor: _otpLow,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
-      const SizedBox(height: 11),
+      const SizedBox(height: 8),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _verified || _busy ? null : () => _sendCode(),
+          icon: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.sms_outlined, size: 18),
+          label: Text(
+            _verified ? 'ĐÃ XÁC MINH' : 'GỬI MÃ SMS QUA FIREBASE AUTH',
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: _otpGold,
+            foregroundColor: const Color(0xff472a00),
+            disabledBackgroundColor: _otpHigh,
+            disabledForegroundColor: _otpMuted,
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
     ],
   );
 
@@ -434,7 +505,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         const Icon(Icons.hourglass_top, color: _otpGold, size: 16),
         const SizedBox(width: 5),
         const Text(
-          'Hiệu lực demo:',
+          'Mã có hiệu lực:',
           style: TextStyle(color: _otpMuted, fontSize: 11),
         ),
         const SizedBox(width: 5),
@@ -449,10 +520,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         ),
         const Spacer(),
         TextButton.icon(
-          onPressed: _canResend ? _resendDemoCode : null,
+          onPressed: _canResend && _verificationId != null
+              ? () => _sendCode(resend: true)
+              : null,
           icon: const Icon(Icons.refresh, size: 15),
           label: const Text(
-            'Gửi lại mã demo',
+            'Gửi lại SMS',
             style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
           ),
           style: TextButton.styleFrom(
@@ -652,7 +725,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               ),
               SizedBox(height: 3),
               Text(
-                'Không chia sẻ mã xác thực. Trong bản demo này, mã không được gửi tới số điện thoại và không xác minh tài khoản Firebase.',
+                'Không chia sẻ mã xác thực cho người khác. Mã được gửi bởi Firebase Auth và dùng để liên kết số điện thoại với tài khoản hiện tại.',
                 style: TextStyle(color: _otpMuted, fontSize: 10, height: 1.45),
               ),
             ],
@@ -683,7 +756,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             const SizedBox(width: 7),
             const Expanded(
               child: Text(
-                'Cần trợ giúp với mã demo?',
+                'Gặp sự cố khi xác minh số điện thoại?',
                 style: TextStyle(
                   color: _otpText,
                   fontSize: 11,

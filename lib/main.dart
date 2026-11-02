@@ -6,8 +6,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart'
     show kDebugMode, defaultTargetPlatform, TargetPlatform;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import 'core/app_text.dart';
+import 'core/app_preferences.dart';
 import 'features/admin/admin_console.dart';
 import 'features/auth/sign_in_screen.dart';
 import 'features/cards/card_table_screen.dart';
@@ -65,6 +67,7 @@ Future<void> main() async {
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
       functions.useFunctionsEmulator(host, 5001);
     }
+    await AppPreferences.loadLanguage();
     runApp(const GameApp());
   } catch (error) {
     runApp(
@@ -80,41 +83,46 @@ Future<void> main() async {
 class GameApp extends StatelessWidget {
   const GameApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Phòng trò chơi • Xu ảo',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xff277767),
-        surface: const Color(0xfff8f5ee),
+  Widget build(BuildContext context) => ValueListenableBuilder<Locale>(
+    valueListenable: AppPreferences.locale,
+    builder: (context, _, _) => MaterialApp(
+      title: 'Phòng trò chơi • Xu ảo',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff277767),
+          surface: const Color(0xfff8f5ee),
+        ),
+        scaffoldBackgroundColor: const Color(0xfff8f5ee),
+        appBarTheme: const AppBarTheme(backgroundColor: Color(0xfff8f5ee)),
+        cardTheme: CardThemeData(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
       ),
-      scaffoldBackgroundColor: const Color(0xfff8f5ee),
-      appBarTheme: const AppBarTheme(backgroundColor: Color(0xfff8f5ee)),
-      cardTheme: CardThemeData(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Scaffold(
+              body: Center(child: Text('Lỗi đăng nhập: ${snapshot.error}')),
+            );
+          }
+          if (!snapshot.hasData &&
+              snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final user = snapshot.data;
+          return user == null
+              ? const SignInScreen()
+              : Lobby(key: ValueKey(user.uid), user: user);
+        },
       ),
-    ),
-    home: StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(child: Text('Lỗi đăng nhập: ${snapshot.error}')),
-          );
-        }
-        if (!snapshot.hasData &&
-            snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final user = snapshot.data;
-        return user == null
-            ? const SignInScreen()
-            : Lobby(key: ValueKey(user.uid), user: user);
-      },
     ),
   );
 }
@@ -283,13 +291,21 @@ class _LobbyState extends State<Lobby> {
                           child: Icon(Icons.account_balance_wallet_outlined),
                         ),
                         title: Text(
-                          '${data?['balance'] ?? '—'} xu ảo',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          data?['preferences'] is Map &&
+                                  (data!['preferences']
+                                          as Map)['hideBalance'] ==
+                                      true
+                              ? '•••••• xu ảo'
+                              : '${data?['balance'] ?? '—'} xu ảo',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         subtitle: Text(
                           data?['blocked'] == true
                               ? 'Tài khoản bị khóa: ${data?['blockReason'] ?? 'Liên hệ quản trị'}'
-                              : '${widget.user.email ?? widget.user.uid} • ${isAdmin ? 'Admin' : 'Hội viên'}',
+                              : '${data?['nickname'] ?? widget.user.email ?? widget.user.uid} • ${isAdmin ? 'Admin' : 'Hội viên'}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).push(
@@ -699,8 +715,8 @@ class _RoundScreenState extends State<RoundScreen> {
                             TextField(
                               controller: amount,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Số xu cược',
+                              decoration: InputDecoration(
+                                labelText: appLocalizedText('Số xu cược'),
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -736,6 +752,9 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   );
                                                   return;
                                                 }
+                                                unawaited(
+                                                  AppPreferences.selectionFeedback(),
+                                                );
                                                 call('placeBet', {
                                                   'roundId': id,
                                                   'side': side.$1,
@@ -783,8 +802,10 @@ class _RoundScreenState extends State<RoundScreen> {
                               TextField(
                                 controller: reason,
                                 maxLength: 300,
-                                decoration: const InputDecoration(
-                                  labelText: 'Lý do (5–300 ký tự)',
+                                decoration: InputDecoration(
+                                  labelText: appLocalizedText(
+                                    'Lý do (5–300 ký tự)',
+                                  ),
                                 ),
                               ),
                               if (status == 'open')
@@ -810,7 +831,9 @@ class _RoundScreenState extends State<RoundScreen> {
                                 TextField(
                                   controller: result,
                                   decoration: InputDecoration(
-                                    labelText: widget.game.resultHint,
+                                    labelText: appLocalizedText(
+                                      widget.game.resultHint,
+                                    ),
                                     border: const OutlineInputBorder(),
                                   ),
                                 ),

@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 import 'package:flutter/services.dart';
 
 import 'change_password_screen.dart';
@@ -281,6 +283,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final userData = userSnap.data?.data();
                       final balance = userData?['balance'] ?? 0;
                       final isBlocked = userData?['blocked'] == true;
+                      final preferences = userData?['preferences'];
+                      final hideBalance =
+                          preferences is Map &&
+                          preferences['hideBalance'] == true;
 
                       return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                         stream: FirebaseFirestore.instance
@@ -309,7 +315,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   const SizedBox(height: 14),
 
                                   // VIP Wallet Card (Thẻ Số Dư Hoàng Gia)
-                                  _buildWalletCard(balance),
+                                  _buildWalletCard(
+                                    balance,
+                                    forceHidden: hideBalance,
+                                  ),
                                   const SizedBox(height: 14),
 
                                   // Operational Shortcuts (4 Essential Hub Icons)
@@ -678,7 +687,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildWalletCard(int balance) {
+  Widget _buildWalletCard(int balance, {bool forceHidden = false}) {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -729,7 +738,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: [
                       Text(
-                        _isBalanceVisible ? '$balance' : '••••••••••••',
+                        !forceHidden && _isBalanceVisible
+                            ? '$balance'
+                            : '••••••••••••',
                         style: const TextStyle(
                           color: Color(0xffffc174),
                           fontSize: 24,
@@ -746,20 +757,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      IconButton(
-                        iconSize: 18,
-                        padding: const EdgeInsets.only(left: 6),
-                        constraints: const BoxConstraints(),
-                        icon: Icon(
-                          _isBalanceVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: const Color(0xffa08e7a),
+                      if (!forceHidden)
+                        IconButton(
+                          iconSize: 18,
+                          padding: const EdgeInsets.only(left: 6),
+                          constraints: const BoxConstraints(),
+                          icon: Icon(
+                            _isBalanceVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                            color: const Color(0xffa08e7a),
+                          ),
+                          onPressed: () => setState(
+                            () => _isBalanceVisible = !_isBalanceVisible,
+                          ),
                         ),
-                        onPressed: () => setState(
-                          () => _isBalanceVisible = !_isBalanceVisible,
-                        ),
-                      ),
                     ],
                   ),
                 ],
@@ -1546,10 +1558,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuRow(
             icon: Icons.pin_outlined,
             title: 'Xác Thực OTP (Demo)',
-            subtitle: 'Bàn phím mã 6 số mô phỏng • không gửi SMS',
+            subtitle: 'Xác minh SMS bằng Firebase Auth',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const OtpVerificationScreen(),
+                builder: (_) => OtpVerificationScreen(user: widget.user),
               ),
             ),
           ),

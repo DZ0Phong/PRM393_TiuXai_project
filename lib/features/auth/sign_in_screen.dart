@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 
 import 'password_recovery_screen.dart';
 

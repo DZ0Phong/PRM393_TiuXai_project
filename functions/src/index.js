@@ -1,5 +1,6 @@
 'use strict';
 const {initializeApp} = require('firebase-admin/app');
+const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, Timestamp} = require('firebase-admin/firestore');
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
@@ -38,7 +39,7 @@ exports.getLeaderboard = call(async () => {
     let query = db.collection('users').orderBy('balance', 'desc').limit(100);
     if (cursor) query = query.startAfter(cursor);
     const snapshot = await query.get();
-    people.push(...snapshot.docs.filter((doc) => doc.data().isBot !== true));
+    people.push(...snapshot.docs.filter((doc) => doc.data().isBot !== true && doc.data().preferences?.hideLeaderboard !== true));
     if (snapshot.size < 100) break;
     cursor = snapshot.docs.at(-1);
   }
@@ -57,6 +58,105 @@ exports.ensureProfile = call(async (req) => {
     audit(tx, req.auth.uid, 'WELCOME', {amount: 10000});
   });
   return {ok: true};
+});
+
+// Update the signed-in user's email immediately; the new address remains unverified.
+exports.updateMyEmail = call(async (req) => {
+  const email = typeof req.data?.email === 'string' ? req.data.email.trim() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    throw new HttpsError('invalid-argument', 'Địa chỉ email không hợp lệ');
+  }
+  try {
+    await getAuth().updateUser(req.auth.uid, {email, emailVerified: false});
+  } catch (error) {
+    if (error.code === 'auth/email-already-exists') {
+      throw new HttpsError('already-exists', 'Email này đã được tài khoản khác sử dụng');
+    }
+    if (error.code === 'auth/invalid-email') {
+      throw new HttpsError('invalid-argument', 'Địa chỉ email không hợp lệ');
+    }
+    throw error;
+  }
+  return {ok: true, email};
+});
+
+// Profile changes are server-validated because client writes to users/{uid} are denied by Firestore rules.
+exports.updateMyProfile = call(async (req) => {
+  const input = req.data || {};
+  if (typeof input !== 'object' || Array.isArray(input)) throw new HttpsError('invalid-argument', 'Hồ sơ không hợp lệ');
+  const allowed = new Set(['nickname', 'bio', 'birthday', 'gender', 'avatarFrame']);
+  if (Object.keys(input).some((key) => !allowed.has(key))) throw new HttpsError('invalid-argument', 'Có trường hồ sơ không được hỗ trợ');
+  const updates = {};
+  if ('nickname' in input) {
+    if (typeof input.nickname !== 'string' || input.nickname.trim().length < 2 || input.nickname.trim().length > 24) throw new HttpsError('invalid-argument', 'Biệt danh cần từ 2 đến 24 ký tự');
+    updates.nickname = input.nickname.trim();
+  }
+  if ('bio' in input) {
+    if (typeof input.bio !== 'string' || input.bio.trim().length > 60) throw new HttpsError('invalid-argument', 'Giới thiệu tối đa 60 ký tự');
+    updates.bio = input.bio.trim();
+  }
+  if ('birthday' in input) {
+    if (input.birthday !== null) {
+      if (typeof input.birthday !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.birthday)) throw new HttpsError('invalid-argument', 'Ngày sinh không hợp lệ');
+      const date = new Date(`${input.birthday}T00:00:00Z`);
+      if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== input.birthday || date.getTime() > Date.now()) {
+        throw new HttpsError('invalid-argument', 'Ngày sinh không hợp lệ');
+      }
+    }
+    updates.birthday = input.birthday;
+  }
+  if ('gender' in input) {
+    if (!['male', 'female', 'other'].includes(input.gender)) throw new HttpsError('invalid-argument', 'Tuỳ chọn giới tính không hợp lệ');
+    updates.gender = input.gender;
+  }
+  if ('avatarFrame' in input) {
+    if (!['dragon', 'phoenix', 'wealth'].includes(input.avatarFrame)) throw new HttpsError('invalid-argument', 'Khung đại diện không hợp lệ');
+    updates.avatarFrame = input.avatarFrame;
+  }
+  if (Object.keys(updates).length === 0) throw new HttpsError('invalid-argument', 'Không có thông tin cần lưu');
+  const ref = db.doc(`users/${req.auth.uid}`);
+  await db.runTransaction(async (tx) => {
+    const user = await tx.get(ref);
+    active(user);
+    tx.update(ref, {...updates, profileUpdatedAt: now()});
+    audit(tx, req.auth.uid, 'PROFILE_UPDATE', {fields: Object.keys(updates)});
+  });
+  return {ok: true, profile: updates};
+});
+
+// The phone number comes from the Firebase Auth token only; callers cannot claim a verified number.
+exports.syncVerifiedPhoneNumber = call(async (req) => {
+  const phoneNumber = req.auth.token.phone_number;
+  if (typeof phoneNumber !== 'string' || !/^\+[1-9]\d{7,14}$/.test(phoneNumber)) {
+    throw new HttpsError('failed-precondition', 'Tài khoản chưa xác minh số điện thoại');
+  }
+  const ref = db.doc(`users/${req.auth.uid}`);
+  await db.runTransaction(async (tx) => {
+    const user = await tx.get(ref);
+    active(user);
+    tx.update(ref, {phone: phoneNumber, verifiedPhoneNumber: phoneNumber, phoneVerifiedAt: now()});
+    audit(tx, req.auth.uid, 'PHONE_VERIFIED', {method: 'firebase_phone_auth'});
+  });
+  return {ok: true, phoneNumber};
+});
+
+// Only preferences that have a real effect in the app are accepted here.
+exports.updateMyPrivacyPreferences = call(async (req) => {
+  const input = req.data?.preferences;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpsError('invalid-argument', 'Tuỳ chọn không hợp lệ');
+  const allowed = new Set(['hideBalance', 'hideLeaderboard']);
+  const entries = Object.entries(input);
+  if (entries.length === 0 || entries.some(([key, value]) => !allowed.has(key) || typeof value !== 'boolean')) throw new HttpsError('invalid-argument', 'Tuỳ chọn không được hỗ trợ');
+  const ref = db.doc(`users/${req.auth.uid}`);
+  let preferences;
+  await db.runTransaction(async (tx) => {
+    const user = await tx.get(ref);
+    active(user);
+    preferences = {...(user.data().preferences || {}), ...Object.fromEntries(entries)};
+    tx.update(ref, {preferences, preferencesUpdatedAt: now()});
+    audit(tx, req.auth.uid, 'PRIVACY_PREFERENCES_UPDATE', {fields: entries.map(([key]) => key)});
+  });
+  return {ok: true, preferences};
 });
 
 exports.startRound = call(async (req) => {

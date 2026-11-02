@@ -1,5 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 
 const _settingsBg = Color(0xff10131a);
 const _settingsLow = Color(0xff191c22);
@@ -27,13 +31,37 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCY2Df80ZIpzz0qMxVdo10dpE0v14GuiLqyaW7k5ADkO3Xq2mPeA9p173NCtVsSKRmnBt05g8ZRMhhU1fVSkQuGsyIMWyXPZv__iSo373ChbE8ylxc-Sm75Tzs4F0DmnKyvL6xWG_kE6tESvOlv5SNhqoG3DBe1DNvPgCzZpAGMneiTlGwYutvT_rmpIuAYIWAdogI8LpJD3oAjdFJWw2BcT-qQ7Wo3hRw_zZn5_Jpn';
 
   final Map<String, bool> _switches = {
-    'twoFactor': true,
+    'twoFactor': false,
     'hideBalance': true,
     'hideLeaderboard': false,
     'blockInvites': false,
-    'biometric': true,
-    'unknownDevice': true,
+    'biometric': false,
+    'unknownDevice': false,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrivacyPreferences();
+  }
+
+  Future<void> _loadPrivacyPreferences() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .doc('users/${widget.user.uid}')
+          .get();
+      final preferences = snapshot.data()?['preferences'];
+      if (!mounted || preferences is! Map) return;
+      setState(() {
+        for (final key in ['hideBalance', 'hideLeaderboard']) {
+          final value = preferences[key];
+          if (value is bool) _switches[key] = value;
+        }
+      });
+    } catch (_) {
+      // Keep safe defaults if the profile cannot be loaded.
+    }
+  }
 
   Future<void> _showNotConfigured(String feature) async {
     await showDialog<void>(
@@ -67,8 +95,34 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  void _toggle(String key) =>
-      setState(() => _switches[key] = !(_switches[key] ?? false));
+  void _message(String message) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
+
+  Future<void> _toggle(String key) async {
+    if (key != 'hideBalance' && key != 'hideLeaderboard') {
+      await _showNotConfigured('Tuỳ chọn này');
+      return;
+    }
+    final previous = _switches[key] ?? false;
+    final next = !previous;
+    setState(() => _switches[key] = next);
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('updateMyPrivacyPreferences').call({
+        'preferences': {key: next},
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _switches[key] = previous);
+      _message(error.message ?? 'Không lưu được tuỳ chọn (${error.code}).');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _switches[key] = previous);
+      _message('Không lưu được tuỳ chọn: $error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(

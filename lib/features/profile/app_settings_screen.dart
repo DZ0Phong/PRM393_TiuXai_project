@@ -1,4 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart' hide Text;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/app_text.dart';
+import '../../core/app_preferences.dart';
 
 const _appSettingsBg = Color(0xff10131a);
 const _appSettingsLow = Color(0xff191c22);
@@ -35,6 +41,40 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   String _road = 'Cầu Bàn Cờ';
   String _language = 'Tiếng Việt';
 
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPreferences());
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      for (final key in _switches.keys) {
+        _switches[key] = prefs.getBool('appSettings.$key') ?? _switches[key]!;
+      }
+      _musicVolume = prefs.getDouble('appSettings.musicVolume') ?? _musicVolume;
+      _diceVolume = prefs.getDouble('appSettings.diceVolume') ?? _diceVolume;
+      _dealer = prefs.getString('appSettings.dealer') ?? _dealer;
+      _fps = prefs.getString('appSettings.fps') ?? _fps;
+      _road = prefs.getString('appSettings.road') ?? _road;
+      _language = AppPreferences.languageLabel;
+    });
+  }
+
+  Future<void> _persistPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in _switches.entries) {
+      await prefs.setBool('appSettings.${entry.key}', entry.value);
+    }
+    await prefs.setDouble('appSettings.musicVolume', _musicVolume);
+    await prefs.setDouble('appSettings.diceVolume', _diceVolume);
+    await prefs.setString('appSettings.dealer', _dealer);
+    await prefs.setString('appSettings.fps', _fps);
+    await prefs.setString('appSettings.road', _road);
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -53,11 +93,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: _appSettingsSurface,
         title: const Text(
-          'Tuỳ chọn bản demo',
+          'Chưa khả dụng',
           style: TextStyle(color: _appSettingsGold),
         ),
         content: Text(
-          '$feature hiện chỉ thay đổi trạng thái hiển thị trong màn cài đặt. Ứng dụng chưa tích hợp âm thanh, rung, thông báo đẩy hoặc thay đổi chất lượng đồ hoạ thực tế.',
+          '$feature chưa được tích hợp. Rung phản hồi, kiểu bảng cầu và ngôn ngữ ứng dụng hiện đang hoạt động.',
           style: const TextStyle(color: _appSettingsText, height: 1.45),
         ),
         actions: [
@@ -134,7 +174,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                         Icon(Icons.tune, color: _appSettingsGold, size: 17),
                         SizedBox(width: 7),
                         Text(
-                          'CÀI ĐẶT GIAO DIỆN DEMO',
+                          'CÀI ĐẶT ỨNG DỤNG',
                           style: TextStyle(
                             color: _appSettingsGold,
                             fontSize: 10,
@@ -146,7 +186,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                     ),
                     SizedBox(height: 5),
                     Text(
-                      'Các lựa chọn trên màn này chưa tác động đến âm thanh, rung, thông báo hay hiệu năng trò chơi.',
+                      'Rung, kiểu bảng cầu và ngôn ngữ được áp dụng. Âm thanh, FPS và thông báo chưa được tích hợp.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _appSettingsMuted,
@@ -220,7 +260,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Text(
-                        'Tuỳ Chỉnh Bản Demo',
+                        'Tuỳ Chỉnh Trải Nghiệm',
                         style: TextStyle(
                           color: _appSettingsGold,
                           fontSize: 18,
@@ -237,7 +277,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
-                          'CÀI ĐẶT UI',
+                          'CÀI ĐẶT',
                           style: TextStyle(
                             color: Color(0xff472a00),
                             fontSize: 8,
@@ -249,7 +289,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Tuỳ chọn giao diện cho âm thanh, hiển thị và thông báo.',
+                    'Tuỳ chỉnh phản hồi, bảng cầu và ngôn ngữ ứng dụng.',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -321,7 +361,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         _sliderRow(
           icon: Icons.volume_mute,
           value: _musicVolume,
-          onChanged: (value) => setState(() => _musicVolume = value),
+          onChanged: null,
         ),
         const SizedBox(height: 10),
         _switchRow(
@@ -334,15 +374,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         _sliderRow(
           icon: Icons.volume_down,
           value: _diceVolume,
-          onChanged: (value) => setState(() => _diceVolume = value),
+          onChanged: null,
         ),
         const SizedBox(height: 10),
         _switchRow(
           keyName: 'vibration',
           icon: Icons.vibration,
           title: 'Rung Phản Hồi',
-          subtitle: 'Hiệu ứng rung chưa được tích hợp',
-          onChanged: () => _showUnavailable('Rung phản hồi'),
+          subtitle: 'Rung nhẹ khi chọn cược và tuỳ chọn',
         ),
         const SizedBox(height: 14),
         _settingLabel(Icons.record_voice_over, 'Giọng Đọc'),
@@ -350,10 +389,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         _choiceGrid(
           options: const ['MC Miền Nam', 'MC Miền Bắc'],
           selected: _dealer,
-          onSelected: (value) {
-            setState(() => _dealer = value);
-            _showMessage('Đã chọn $value (tuỳ chọn giao diện demo).');
-          },
+          onSelected: (_) => _showUnavailable('Giọng đọc MC'),
           columns: 2,
         ),
       ]),
@@ -371,10 +407,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         _choiceGrid(
           options: const ['60 FPS', '120 FPS'],
           selected: _fps,
-          onSelected: (value) {
-            setState(() => _fps = value);
-            _showMessage('$value được chọn trong giao diện demo.');
-          },
+          onSelected: (_) => _showUnavailable('Tuỳ chọn FPS'),
           columns: 2,
           descriptions: const [
             'Tuỳ chọn tiết kiệm pin',
@@ -389,7 +422,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           selected: _road,
           onSelected: (value) {
             setState(() => _road = value);
-            _showMessage('$value được chọn (chưa áp dụng vào bàn chơi).');
+            unawaited(AppPreferences.setRoadStyle(value));
+            unawaited(AppPreferences.selectionFeedback());
+            _showMessage('Đã lưu kiểu hiển thị $value.');
           },
           columns: 3,
           icons: const [Icons.grid_view, Icons.analytics, Icons.water_drop],
@@ -402,7 +437,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           selected: _language,
           onSelected: (value) {
             setState(() => _language = value);
-            _showMessage('Đã chọn $value cho giao diện tuỳ chọn.');
+            unawaited(AppPreferences.setLanguage(value));
+            _showMessage('Đã chuyển ngôn ngữ sang $value.');
           },
           columns: 3,
         ),
@@ -594,7 +630,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _GoldSwitch(
         value: _switches[keyName] ?? false,
         onChanged: (value) {
+          if (onChanged != null) {
+            onChanged();
+            return;
+          }
           setState(() => _switches[keyName] = value);
+          unawaited(_persistPreferences());
+          if (keyName == 'vibration') {
+            unawaited(AppPreferences.setVibrationEnabled(value));
+            if (value) unawaited(AppPreferences.selectionFeedback());
+          }
           onChanged?.call();
         },
       ),
@@ -619,7 +664,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Widget _sliderRow({
     required IconData icon,
     required double value,
-    required ValueChanged<double> onChanged,
+    required ValueChanged<double>? onChanged,
   }) => Padding(
     padding: const EdgeInsets.only(left: 42, right: 3, top: 3),
     child: Row(

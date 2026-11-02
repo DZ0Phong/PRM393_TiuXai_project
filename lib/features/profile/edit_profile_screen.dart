@@ -1,5 +1,13 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
+
+import '../auth/otp_verification_screen.dart';
 
 const _profileBg = Color(0xff10131a);
 const _profileLow = Color(0xff191c22);
@@ -24,12 +32,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _nickname;
   late final TextEditingController _email;
   final _phone = TextEditingController();
+  String _initialPhone = '';
   final _slogan = TextEditingController(
     text: 'Đánh là Thắng - Cầu bệt theo đến cùng',
   );
-  late final String _initialNickname;
-  late final String _initialEmail;
-  late final String _initialSlogan;
+  late String _initialNickname;
+  late String _initialEmail;
+  late String _initialSlogan;
+  DateTime? _initialBirthday;
+  String _initialGender = 'male';
+  String _initialFrame = 'dragon';
+  bool _emailVerified = false;
   DateTime? _birthday;
   String _gender = 'male';
   String _frame = 'dragon';
@@ -44,10 +57,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final userName = widget.user.email?.split('@').first ?? 'HoiVien';
     _initialNickname = userName.isEmpty ? 'Hội viên' : userName;
     _initialEmail = widget.user.email ?? '';
+    _emailVerified = widget.user.emailVerified;
     _initialSlogan = _slogan.text;
     _nickname = TextEditingController(text: _initialNickname);
     _email = TextEditingController(text: _initialEmail);
     _slogan.addListener(_refresh);
+    unawaited(_loadProfile());
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .doc('users/${widget.user.uid}')
+          .get();
+      final profile = snapshot.data();
+      if (!mounted || profile == null) return;
+      setState(() {
+        if (_nickname.text == _initialNickname &&
+            profile['nickname'] is String) {
+          _nickname.text = profile['nickname'] as String;
+        }
+        if (profile['phone'] is String) {
+          _phone.text = profile['phone'] as String;
+        }
+        _initialPhone = _phone.text;
+        if (_slogan.text == _initialSlogan && profile['bio'] is String) {
+          _slogan.text = profile['bio'] as String;
+        }
+        final birthday = profile['birthday'];
+        if (birthday is String) _birthday = DateTime.tryParse(birthday);
+        if (profile['gender'] is String) _gender = profile['gender'] as String;
+        if (profile['avatarFrame'] is String) {
+          _frame = profile['avatarFrame'] as String;
+        }
+        _initialNickname = _nickname.text;
+        _initialSlogan = _slogan.text;
+        _initialBirthday = _birthday;
+        _initialGender = _gender;
+        _initialFrame = _frame;
+      });
+    } catch (_) {
+      // The form remains usable if a profile has not been created yet.
+    }
   }
 
   @override
@@ -95,12 +146,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _cancel() {
     _nickname.text = _initialNickname;
     _email.text = _initialEmail;
-    _phone.clear();
+    _phone.text = _initialPhone;
     _slogan.text = _initialSlogan;
     setState(() {
-      _birthday = null;
-      _gender = 'male';
-      _frame = 'dragon';
+      _birthday = _initialBirthday;
+      _gender = _initialGender;
+      _frame = _initialFrame;
     });
   }
 
@@ -109,27 +160,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _message('Biệt danh không được để trống.');
       return;
     }
+    final newEmail = _email.text.trim();
+    final emailChanged = newEmail.toLowerCase() != _initialEmail.toLowerCase();
+    if (newEmail.isEmpty ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(newEmail)) {
+      _message('Nhập địa chỉ email hợp lệ.');
+      return;
+    }
     setState(() => _saving = true);
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xff30c88f),
-        content: const Text(
-          'Đã lưu thay đổi trên giao diện demo. Hồ sơ Firebase chưa thay đổi.',
-          style: TextStyle(
-            color: Color(0xff003824),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        action: SnackBarAction(
-          label: 'ĐÓNG',
-          textColor: const Color(0xff003824),
-          onPressed: () {},
-        ),
-      ),
-    );
+    try {
+      if (emailChanged) {
+        await FirebaseFunctions.instanceFor(
+          region: 'asia-southeast1',
+        ).httpsCallable('updateMyEmail').call({'email': newEmail});
+        await FirebaseAuth.instance.currentUser?.reload();
+        _initialEmail = FirebaseAuth.instance.currentUser?.email ?? newEmail;
+        _emailVerified =
+            FirebaseAuth.instance.currentUser?.emailVerified ?? false;
+        _email.text = _initialEmail;
+      }
+      final result =
+          await FirebaseFunctions.instanceFor(
+            region: 'asia-southeast1',
+          ).httpsCallable('updateMyProfile').call<Map<String, dynamic>>({
+            'nickname': _nickname.text.trim(),
+            'bio': _slogan.text.trim(),
+            'birthday': _birthday?.toIso8601String().split('T').first,
+            'gender': _gender,
+            'avatarFrame': _frame,
+          });
+      if (!mounted) return;
+      _initialNickname = _nickname.text.trim();
+      _initialSlogan = _slogan.text.trim();
+      _initialBirthday = _birthday;
+      _initialGender = _gender;
+      _initialFrame = _frame;
+      _message(
+        result.data['ok'] == true
+            ? emailChanged
+                  ? 'Đã cập nhật email tài khoản ngay lập tức.'
+                  : 'Đã lưu hồ sơ lên Firebase.'
+            : 'Không lưu được hồ sơ.',
+      );
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        _message(error.message ?? 'Firebase Auth lỗi: ${error.code}.');
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) _message(error.message ?? 'Lỗi lưu hồ sơ: ${error.code}.');
+    } catch (error) {
+      if (mounted) _message('Không lưu được hồ sơ: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -605,7 +688,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   );
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
+    hintText: appLocalizedText(hint),
     hintStyle: const TextStyle(color: _profileOutline, fontSize: 13),
     border: InputBorder.none,
     isDense: true,
@@ -707,7 +790,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Expanded(
               child: TextField(
                 controller: _phone,
-                keyboardType: TextInputType.phone,
+                readOnly: true,
                 style: const TextStyle(
                   color: _profileText,
                   fontSize: 14,
@@ -718,8 +801,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(width: 8),
             TextButton(
-              onPressed: () =>
-                  _message('Xác minh số điện thoại chưa được cấu hình.'),
+              onPressed: () async {
+                await Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => OtpVerificationScreen(user: widget.user),
+                  ),
+                );
+                await FirebaseAuth.instance.currentUser?.reload();
+                await _loadProfile();
+              },
               style: TextButton.styleFrom(
                 backgroundColor: _profileHigh,
                 foregroundColor: _profileGold,
@@ -735,6 +825,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ],
         ),
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'Số điện thoại chỉ được cập nhật sau khi xác minh SMS với Firebase Auth.',
+        style: TextStyle(color: _profileMuted, fontSize: 11),
       ),
     ],
   );
@@ -756,8 +851,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ),
             Icon(
-              widget.user.emailVerified ? Icons.verified : Icons.info_outline,
-              color: widget.user.emailVerified ? _profileMint : _profileGold,
+              _emailVerified ? Icons.verified : Icons.info_outline,
+              color: !_emailVerified ? _profileGold : _profileMint,
               size: 18,
             ),
           ],
@@ -765,7 +860,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       const SizedBox(height: 4),
       const Text(
-        'Email hiển thị để nhận diện tài khoản; chỉnh sửa ở đây chưa đổi email Firebase.',
+        'Email đăng nhập được cập nhật ngay khi lưu; email mới cần xác minh để hiện trạng thái đã xác thực.',
         style: TextStyle(color: _profileMuted, fontSize: 11),
       ),
     ],

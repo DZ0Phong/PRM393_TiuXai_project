@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 
 import '../../core/pending_mutation.dart';
 
@@ -219,21 +221,25 @@ class _AdminConsoleState extends State<AdminConsole> {
         TextField(
           controller: target,
           enabled: !busy && pending == null,
-          decoration: const InputDecoration(labelText: 'UID người chơi'),
+          decoration: InputDecoration(
+            labelText: appLocalizedText('UID người chơi'),
+          ),
         ),
         TextField(
           controller: delta,
           enabled: !busy && pending == null,
           keyboardType: const TextInputType.numberWithOptions(signed: true),
-          decoration: const InputDecoration(
-            labelText: 'Thay đổi xu (±1–100000)',
+          decoration: InputDecoration(
+            labelText: appLocalizedText('Thay đổi xu (±1–100000)'),
           ),
         ),
         TextField(
           controller: reason,
           enabled: !busy && pending == null,
           maxLength: 300,
-          decoration: const InputDecoration(labelText: 'Lý do (5–300 ký tự)'),
+          decoration: InputDecoration(
+            labelText: appLocalizedText('Lý do (5–300 ký tự)'),
+          ),
         ),
         Wrap(
           spacing: 8,

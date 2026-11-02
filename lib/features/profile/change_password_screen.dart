@@ -1,8 +1,7 @@
-import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 
 import 'password_change_success_screen.dart';
 
@@ -31,21 +30,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _current = TextEditingController();
   final _next = TextEditingController();
   final _confirm = TextEditingController();
-  final _otp = TextEditingController();
   bool _showCurrent = false;
   bool _showNext = false;
   bool _showConfirm = false;
   bool _busy = false;
-  int _otpSeconds = 0;
-  Timer? _timer;
 
   @override
   void dispose() {
-    _timer?.cancel();
     _current.dispose();
     _next.dispose();
     _confirm.dispose();
-    _otp.dispose();
     super.dispose();
   }
 
@@ -55,23 +49,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool get _specialOk => RegExp(r'[^A-Za-z0-9]').hasMatch(_next.text);
   int get _strength =>
       [_lengthOk, _upperOk, _numberOk, _specialOk].where((v) => v).length;
-
-  void _startOtpCountdown() {
-    // OTP delivery is not configured in this project. Keep the reference UI
-    // interactive without pretending that a code was sent or verified.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Gửi OTP chưa được cấu hình trong bản demo.'),
-      ),
-    );
-    setState(() => _otpSeconds = 60);
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return timer.cancel();
-      setState(() => _otpSeconds--);
-      if (_otpSeconds <= 0) timer.cancel();
-    });
-  }
 
   Future<void> _forgotPassword() async {
     final email = widget.user.email;
@@ -237,9 +214,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                _buildOtpCard(),
-                const SizedBox(height: 14),
                 _buildAdvisory(),
                 const SizedBox(height: 18),
                 _buildSubmit(),
@@ -531,117 +505,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       ),
     );
   }
-
-  Widget _buildOtpCard() => _card(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: _mint.withValues(alpha: .15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.phonelink_lock, color: _mint, size: 19),
-            ),
-            const SizedBox(width: 9),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Mã Xác Thực 2 Lớp (OTP)',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    'Gửi qua Telegram / SMS đã liên kết',
-                    style: TextStyle(color: _muted, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _mint.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Đã bảo mật',
-                style: TextStyle(color: _mint, fontSize: 10),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _otp,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: const TextStyle(
-                  color: _gold,
-                  letterSpacing: 7,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: 'Nhập 6 số OTP',
-                  hintStyle: const TextStyle(
-                    color: _outline,
-                    fontSize: 13,
-                    letterSpacing: 0,
-                  ),
-                  prefixIcon: const Icon(Icons.pin, color: _gold, size: 19),
-                  filled: true,
-                  fillColor: const Color(0xff0b0e14),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 48,
-              child: FilledButton(
-                onPressed: _otpSeconds > 0 ? null : _startOtpCountdown,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _surfaceHigh,
-                  foregroundColor: _gold,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Text(
-                  _otpSeconds > 0 ? '${_otpSeconds}s gửi lại' : 'Nhận mã OTP',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        const Text(
-          'OTP chỉ là giao diện tham khảo; luồng gửi và xác minh OTP chưa được cấu hình.',
-          style: TextStyle(color: _outline, fontSize: 10, height: 1.3),
-        ),
-      ],
-    ),
-  );
 
   Widget _buildAdvisory() => Container(
     padding: const EdgeInsets.all(14),

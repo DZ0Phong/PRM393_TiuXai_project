@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../../core/app_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RoundBets extends StatelessWidget {
