@@ -4,7 +4,7 @@
 
 ## Hiện trạng (01/11/2026)
 
-- **Chơi được trên Emulator:** Tài/Xỉu, Bầu Cua, Xóc Xóc (ba phòng phiên độc lập). Mỗi phiên 30 giây, cược thêm cùng cửa (Tài/Xỉu) hoặc nhiều cửa (Bầu Cua/Xóc Xóc), tối đa 100 người/phiên. Có cầu/biểu đồ lịch sử cho Tài/Xỉu, Xóc Xóc và lịch sử/tần suất cửa sổ Bầu Cua. Cược tối thiểu 1000, bội số 100; Xóc Xóc dùng mệnh giá 1000/10000/50000/100000/1000000. Admin mở phiên random hoặc chọn kết quả hợp lệ **sau khi khóa cược**; kết quả không sửa lại được. Mọi chọn kết quả, lý do và tác động ví được ghi `auditLogs` **chỉ admin đọc**. `tick` khóa phiên quá hạn và tự chốt random trên Firebase thật; Emulator không tự chạy Scheduler, admin nhấn Khóa/Chốt thủ công.
+- **Chơi được trên Emulator:** Tài/Xỉu, Bầu Cua, Xóc Xóc tự mở phiên random 30 giây; hết giờ server khóa, chờ tối đa 5 giây để admin can thiệp, sau đó tự tạo kết quả random nếu chưa bị can thiệp; hiện kết quả 2 giây rồi tự mở phiên tiếp. Client gọi `advanceRandomRound`/`ensureGameRounds`; scheduler là cơ chế dự phòng. Admin chỉ chuyển phiên đã khóa sang chế độ chọn kết quả; thao tác/lý do/tác động ví được ghi trong `auditLogs` **chỉ admin đọc**. Bầu Cua cho hoàn cược đã xác nhận trước khi phiên khóa. Cược thêm cùng cửa ở Tài/Xỉu, nhiều cửa ở Bầu Cua/Xóc Xóc, tối đa 100 người/phiên; cược tối thiểu 1000 và bội số 100. Xóc Xóc dùng mệnh giá 1000/10000/50000/100000/1000000.
 - **Poker/Ba Cây chơi được trên Emulator:** bàn 2–6 ghế, mua vào 10× ante (ante 10–100), tham gia bằng mã bàn, chủ bàn bắt đầu khi đủ tối thiểu 2 ghế. Admin cấu hình tối đa 0–5 bot theo sức chứa bàn, hủy/hoàn với lý do. Ba Cây dùng 36 lá và Chương so từng người ngay (lãi 0,98× làm tròn xuống, chưa có Gà/ván tiếp); Poker Texas Hold’em ante, 4 vòng, tố tăng tùy chọn tối thiểu bằng ante, kiểm all-in/side-pot (chưa trừ phí theo Go88). Mỗi lượt 45 giây; scheduler tự check/fold khi quá hạn, bot dùng cùng engine và ví/ledger. Bài riêng chỉ chủ bài đọc. Hệ thống tạo tối đa 5 ví bot dùng chung, cấp 10.000 điểm ảo đúng một lần mỗi ví; bot vào ghế đang chờ khi admin bật/điều chỉnh cấu hình; ghế công khai chỉ hiện biệt danh chung, không có nhãn bot. Cấu hình và danh tính bot chỉ admin/server xem được. Không mạo danh bạn học; nhóm giải thích cơ chế trong phần tổng kết. Một ván/bàn; muốn chơi tiếp tạo bàn mới.
 - Email/password, hồ sơ khởi tạo 10.000 điểm một lần, lịch sử ledger, bảng xếp hạng 20 tài khoản bằng biệt danh ngắn (ẩn email/bot), admin điều chỉnh điểm có lý do/requestId, khóa tài khoản. Không còn callable nạp/rút.
 - Backend giới hạn quyền bằng admin custom claim; Firestore client chỉ đọc dữ liệu cho phép, không được ghi. Firestore audit không phải hệ thống chứng cứ bất biến trước chủ Firebase project.
@@ -38,7 +38,7 @@
    ```
 
    Nếu đã có UID tài khoản riêng và muốn cấp admin cho UID đó, dùng `node functions/scripts/set-admin.js UID_CUA_BAN` với cùng hai biến môi trường trên, rồi **đăng xuất/đăng nhập** để refresh quyền. Không cấp admin cho tài khoản thử nghiệm không tin cậy.
-6. Smoke test: admin tạo phiên `admin`, player đặt từ 1000 điểm, có thể thêm cược trước hạn 30 giây; sau hạn admin **Khóa** rồi nhập ba xúc xắc/mặt hoặc bốn bit hợp lệ và **Chốt**; kiểm tra ví và ledger của player. Với Poker/Ba Cây, tạo bàn 2–6 ghế rồi thêm player hoặc bật bot bằng admin; Poker đi lượt, Ba Cây tự chốt khi bắt đầu. Emulator không tự chạy scheduler: các ca timeout tự động/`tick` kiểm qua integration test, phiên cược dùng nút Khóa/Chốt thủ công.
+6. Smoke test luồng tự động: vào sảnh để server tạo phiên; đặt cược từ 1000 điểm, có thể thêm cược trong cùng cửa Tài/Xỉu trước hạn 30 giây. Hết giờ phiên tự khóa; admin có thể chọn phiên đã khóa trong 5 giây để nhập kết quả/lý do, nếu không thì server tự chốt random. Với Poker/Ba Cây, tạo bàn 2–6 ghế rồi thêm player hoặc bật bot bằng admin; Poker đi lượt, Ba Cây tự chốt khi bắt đầu. Emulator không tự chạy scheduler; app client gọi tiến phiên và scheduler là dự phòng.
 
 **Nếu không chạy được:** kiểm tra terminal Emulator còn sống, `flutter doctor -v`, đúng Android Emulator (không phải điện thoại thật), đúng project `demo-tai-xiu` và đúng cổng. Lỗi `Không kết nối được Firebase` trên điện thoại thật là do `10.0.2.2` chỉ dành cho Android Emulator; xem mục dưới về `EMULATOR_HOST`. Dữ liệu local của từng máy là dữ liệu thử nghiệm, có thể mất khi Emulator dừng; đừng dùng nó làm dữ liệu chung của nhóm.
 
@@ -85,9 +85,9 @@ CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulat
 
 ## Quy tắc và hạn chế
 
-- Tài/Xỉu: ba xúc xắc 1–6, bộ ba thua cả Tài/Xỉu, còn lại tổng <=10 Xỉu, >=11 Tài, trúng 2× cược gồm vốn.
-- Bầu Cua: ba mặt trong `bau,cua,tom,ca,ga,nai`; trúng nhận `(1+số mặt khớp)×cược`.
-- Xóc Xóc: **quy tắc mô phỏng tự chọn** bốn bit 0/1; tổng chẵn/lẻ, trúng 2× cược. Cần nhóm xác nhận luật mong muốn trước buổi demo.
+- Tài/Xỉu: ba xúc xắc 1–6; bộ ba thua cả hai cửa; nếu không phải bộ ba, tổng <=10 là Xỉu và >=11 là Tài. Cửa thắng trả gốc + lãi 98% (1,98×). Chỉ hoàn phần cược dư ở cửa có tổng cược lớn hơn khi cả hai cửa đều có cược; nếu cửa đối diện trống thì cược chịu kết quả bình thường.
+- Bầu Cua: ba mặt trong `bau,cua,tom,ca,ga,nai`; trúng n mặt nhận gốc + 98% × n × cược (1,98×/2,96×/3,94×).
+- Xóc Xóc: bốn bit 0/1; sáu cửa Chẵn/Lẻ, ba đỏ/trắng và bốn đỏ/trắng, mức trả 1,98×/3,94×/14,7×.
 - Player nhìn thấy chế độ `random/admin` của phiên trước cược nhưng **không** được đọc audit/lý do, thông tin cá nhân người khác. Cần nêu rõ với lớp rằng admin có thể chọn kết quả; không trình bày như trò ngẫu nhiên công bằng nếu là phiên admin.
 - Scheduler kiểm mỗi phút, có thể trễ vì dịch vụ; server từ chối cược/hành động sau hạn dù UI vẫn hiển thị trạng thái cũ. Transaction và requestId/version chống ghi trùng; bot không tự thao túng thắng/thua. Mời bạn bằng mã bàn, chưa có link mời/push notification hoặc matchmaking tự động. Chưa benchmark tải, chưa kiểm thử offline/reconnect trên thiết bị thật, chưa enforce App Check hoặc có APK ký release.
 

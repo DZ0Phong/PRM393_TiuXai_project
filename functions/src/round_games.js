@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 // Source face order: Hươu, Bầu, Gà, Cá, Cua, Tôm (BauCua_cuoc 0..5).
 const faces = Object.freeze(['nai', 'bau', 'ga', 'ca', 'cua', 'tom']);
 const games = Object.freeze({
-  tai_xiu: Object.freeze({sides: Object.freeze(['tai', 'xiu']), dice: 3, rule: 'Ba xúc xắc; tổng > 10 là Tài, kể cả bộ ba đồng mặt. Cửa thắng nhận gốc + 98% lãi trên phần cược không được hoàn.'}),
+  tai_xiu: Object.freeze({sides: Object.freeze(['tai', 'xiu']), dice: 3, rule: 'Ba xúc xắc; bộ ba thua cả Tài và Xỉu. Nếu không phải bộ ba, tổng <= 10 là Xỉu, >= 11 là Tài. Cửa thắng nhận gốc + 98% lãi trên phần cược không được hoàn; chỉ hoàn phần cược dư khi cả Tài và Xỉu đều có cược.'}),
   bau_cua: Object.freeze({sides: faces, dice: 3, rule: 'Ba mặt Hươu/Bầu/Gà/Cá/Cua/Tôm; trúng nhận gốc + 98% × số mặt trúng × cược.'}),
   xoc_xoc: Object.freeze({sides: Object.freeze(['chan', 'le', 'red3', 'red4', 'white3', 'white4']), coins: 4, rule: 'Bốn đồng xu; Chẵn/Lẻ 1.98×, ba đỏ/trắng 3.94×, bốn đỏ/trắng 14.7× tiền cược.'}),
 });
@@ -13,7 +13,7 @@ const games = Object.freeze({
 function validateBet(game, side, amount) {
   return typeof game === 'string' && Object.hasOwn(games, game) && games[game].sides.includes(side) &&
     Number.isSafeInteger(amount) && amount >= 1000 && amount <= 1000000 && amount % 100 === 0 &&
-    (game !== 'xoc_xoc' || [1000, 10000, 50000, 100000, 1000000].includes(amount));
+    (game !== 'xoc_xoc' || amount % 1000 === 0);
 }
 
 function validateOutcome(game, result) {
@@ -52,7 +52,8 @@ function describeOutcome(game, result) {
         ...(ones === 1 ? ['white3'] : ones === 0 ? ['white4'] : [])]};
   }
   const total = result.reduce((sum, die) => sum + die, 0);
-  return {dice: [...result], total, side: total > 10 ? 'tai' : 'xiu'};
+  const triple = result[0] === result[1] && result[1] === result[2];
+  return {dice: [...result], total, triple, side: triple ? null : total > 10 ? 'tai' : 'xiu'};
 }
 
 function payoutStake(game, side, amount, description) {
@@ -72,21 +73,24 @@ function payout(game, side, amount, result) {
   return payoutStake(game, side, amount, describeOutcome(game, result));
 }
 
-// Source Tài/Xỉu returns the excess on the larger side before applying the 2% win fee.
-// Use first-bet timestamp + uid for a stable allocation (the old Mongo query lacked an order).
+// Return excess from the larger pool only when both sides have accepted bets.
+// With no opposing pool, a solo player's wager is exposed to the result normally.
+// Use first-bet timestamp + uid for a stable allocation.
 function creditsForRound(game, bets, result) {
   const outcome = describeOutcome(game, result);
   const refund = new Map();
   if (game === 'tai_xiu') {
     const totals = {tai: 0, xiu: 0};
     for (const b of bets) totals[b.stakes.tai ? 'tai' : 'xiu'] += b.amount;
-    const majority = totals.tai > totals.xiu ? 'tai' : 'xiu';
-    let excess = Math.abs(totals.tai - totals.xiu);
-    for (const b of [...bets].sort((a, b) => a.atMillis - b.atMillis || a.uid.localeCompare(b.uid))) {
-      if (b.stakes[majority] && excess) {
-        const returned = Math.min(excess, b.amount);
-        refund.set(b.uid, returned);
-        excess -= returned;
+    if (totals.tai > 0 && totals.xiu > 0) {
+      const majority = totals.tai > totals.xiu ? 'tai' : 'xiu';
+      let excess = Math.abs(totals.tai - totals.xiu);
+      for (const b of [...bets].sort((a, b) => a.atMillis - b.atMillis || a.uid.localeCompare(b.uid))) {
+        if (b.stakes[majority] && excess) {
+          const returned = Math.min(excess, b.amount);
+          refund.set(b.uid, returned);
+          excess -= returned;
+        }
       }
     }
   }

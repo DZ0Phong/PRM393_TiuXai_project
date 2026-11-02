@@ -93,7 +93,11 @@ class RoundHistory extends StatelessWidget {
                 .toList()
                 .reversed
                 .map(
-                  (row) => (row['outcome'] as Map?)?['side']?.toString() ?? '?',
+                  (row) =>
+                      game.id == 'tai_xiu' &&
+                          (row['outcome'] as Map?)?['triple'] == true
+                      ? 'triple'
+                      : (row['outcome'] as Map?)?['side']?.toString() ?? '?',
                 )
                 .toList();
             final height = game.id == 'tai_xiu' ? 5 : 4;
@@ -131,7 +135,9 @@ class RoundHistory extends StatelessWidget {
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: side == 'tai' || side == 'chan'
+                                      color: side == 'triple'
+                                          ? Colors.amber.shade100
+                                          : side == 'tai' || side == 'chan'
                                           ? Colors.red.shade100
                                           : Colors.blue.shade100,
                                     ),
@@ -144,6 +150,8 @@ class RoundHistory extends StatelessWidget {
                                           ? 'C'
                                           : side == 'le'
                                           ? 'L'
+                                          : side == 'triple'
+                                          ? 'B'
                                           : '?',
                                     ),
                                   ),

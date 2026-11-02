@@ -5,7 +5,7 @@
 - `flutter analyze --no-pub`: sạch; `flutter test --no-pub`: 6/6; `flutter build apk --debug` và `flutter build web`: thành công. Đã xây lại sau cập nhật UI/Android manifest. Trên Android Emulator đã cài APK, tạo tài khoản, vào lobby và tạo bàn Poker; đã sửa lỗi API key giả không hợp lệ do Android SDK phát hiện.
 - `npm audit --omit=dev` còn 6 cảnh báo moderate (glob/minimatch transitive của Firebase Admin). Không ép nâng major gây hỏng SDK; CI chặn mức high trở lên, cảnh báo moderate vẫn in. Full dev audit còn cảnh báo high ở bộ công cụ test/emulator; cần nâng tương thích và rà lại trước phát hành.
 
-Chưa kiểm thử tải đồng thời nhiều điện thoại, App Check device thật, offline/reconnect đầy đủ, release signing. Emulator scheduler không tự chạy tự động; test gọi trực tiếp `tickCardTables`, phiên cược kiểm bằng admin `lockRound`. Firebase production chưa deploy.
+Chưa kiểm thử tải đồng thời nhiều điện thoại, App Check device thật, offline/reconnect đầy đủ, release signing. Emulator scheduler không tự chạy tự động; client gọi `advanceRandomRound` cho phiên random đã hết hạn, còn integration tests có thể gọi `tick` trực tiếp. Firebase production chưa deploy.
 
 ## Đối chiếu luật tham khảo
 
