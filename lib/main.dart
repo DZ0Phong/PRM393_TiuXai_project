@@ -5,7 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart'
-    show kDebugMode, defaultTargetPlatform, TargetPlatform;
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart' hide Text;
 
 import 'core/app_preferences.dart';
@@ -21,7 +21,8 @@ import 'features/game/presentation/widgets/tai_xiu_betting_table.dart';
 import 'features/game/presentation/widgets/bau_cua_betting_table.dart';
 import 'features/game/presentation/widgets/xoc_xoc/xoc_xoc_betting_table.dart';
 
-const emulator = bool.fromEnvironment('EMULATORS', defaultValue: kDebugMode);
+// Đặt defaultValue: false để kết nối trực tiếp Firebase Cloud thật vừa tạo
+const emulator = bool.fromEnvironment('EMULATORS', defaultValue: false);
 const configuredHost = String.fromEnvironment('EMULATOR_HOST');
 final host = configuredHost.isNotEmpty
     ? configuredHost
@@ -44,7 +45,7 @@ Future<void> main() async {
     if (!emulator &&
         const String.fromEnvironment(
               'FIREBASE_PROJECT_ID',
-              defaultValue: 'demo-tai-xiu',
+              defaultValue: 'ad2-8abfa540',
             ) ==
             'demo-tai-xiu') {
       throw StateError('Chưa cấu hình Firebase project thật cho bản release.');
@@ -53,23 +54,23 @@ Future<void> main() async {
       options: const FirebaseOptions(
         apiKey: String.fromEnvironment(
           'FIREBASE_API_KEY',
-          defaultValue: 'AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          defaultValue: 'AIzaSyBJsBK1UBIpYdzH-UgfTbNS9b_Ygqr6FV8',
         ),
         appId: String.fromEnvironment(
           'FIREBASE_APP_ID',
-          defaultValue: '1:123456789:web:demo',
+          defaultValue: '1:429747586374:android:0456200127afbe16b1d147',
         ),
         messagingSenderId: String.fromEnvironment(
           'FIREBASE_SENDER_ID',
-          defaultValue: '123456789',
+          defaultValue: '429747586374',
         ),
         projectId: String.fromEnvironment(
           'FIREBASE_PROJECT_ID',
-          defaultValue: 'demo-tai-xiu',
+          defaultValue: 'ad2-8abfa540',
         ),
         authDomain: String.fromEnvironment(
           'FIREBASE_AUTH_DOMAIN',
-          defaultValue: 'demo-tai-xiu.firebaseapp.com',
+          defaultValue: 'ad2-8abfa540.firebaseapp.com',
         ),
       ),
     );

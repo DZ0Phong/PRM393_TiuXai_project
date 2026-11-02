@@ -13,8 +13,7 @@ void main() {
     expect(definitiveAdjustError('deadline-exceeded'), isFalse);
   });
 
-  test('Debug mặc định dùng emulator', () {
-    expect(emulator, isTrue);
+  test('Cấu hình kết nối Firebase', () {
     expect(
       host,
       defaultTargetPlatform == TargetPlatform.android
