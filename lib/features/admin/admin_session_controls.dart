@@ -228,8 +228,10 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
           const SizedBox(height: 8),
           ValueListenableBuilder<DateTime>(
             valueListenable: _now,
-            builder: (context, time, _) =>
-                RoundBets(roundId: roundId, game: widget.game, now: time),
+            builder: (context, time, _) => Theme(
+              data: ThemeData.dark(useMaterial3: true),
+              child: RoundBets(roundId: roundId, game: widget.game, now: time),
+            ),
           ),
         ],
         const SizedBox(height: 8),
@@ -453,6 +455,8 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
       builder: (context) => AlertDialog(
         backgroundColor: _surface,
         title: const Text('Hủy phiên và hoàn cược?'),
+        titleTextStyle: const TextStyle(color: _gold, fontSize: 20),
+        contentTextStyle: const TextStyle(color: _muted, fontSize: 14),
         content: const Text(
           'Backend sẽ hoàn lại cược đã ghi nhận cho người chơi trong phiên này.',
         ),
