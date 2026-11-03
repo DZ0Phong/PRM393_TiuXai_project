@@ -13,7 +13,7 @@ void main() {
     expect(definitiveAdjustError('deadline-exceeded'), isFalse);
   });
 
-  test('Debug mặc định dùng emulator', () {
+  test('Debug mặc định dùng emulator, không tự ghi vào Firebase thật', () {
     expect(emulator, isTrue);
     expect(
       host,

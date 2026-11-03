@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "429747586374",
+    "project_id": "ad2-8abfa540",
+    "storage_bucket": "ad2-8abfa540.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:429747586374:android:0456200127afbe16b1d147",
+        "android_client_info": {
+          "package_name": "vn.teamfive.tai_xiu_realtime"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJsBK1UBIpYdzH-UgfTbNS9b_Ygqr6FV8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -22,6 +22,7 @@ import 'features/game/presentation/widgets/tai_xiu_betting_table.dart';
 import 'features/game/presentation/widgets/bau_cua_betting_table.dart';
 import 'features/game/presentation/widgets/xoc_xoc/xoc_xoc_betting_table.dart';
 
+// Debug stays on local emulators; live Firebase requires explicit opt-in.
 const emulator = bool.fromEnvironment('EMULATORS', defaultValue: kDebugMode);
 const configuredHost = String.fromEnvironment('EMULATOR_HOST');
 final host = configuredHost.isNotEmpty
@@ -45,7 +46,7 @@ Future<void> main() async {
     if (!emulator &&
         const String.fromEnvironment(
               'FIREBASE_PROJECT_ID',
-              defaultValue: 'demo-tai-xiu',
+              defaultValue: emulator ? 'demo-tai-xiu' : 'ad2-8abfa540',
             ) ==
             'demo-tai-xiu') {
       throw StateError('Chưa cấu hình Firebase project thật cho bản release.');
@@ -54,23 +55,29 @@ Future<void> main() async {
       options: const FirebaseOptions(
         apiKey: String.fromEnvironment(
           'FIREBASE_API_KEY',
-          defaultValue: 'AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          defaultValue: emulator
+              ? 'AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+              : 'AIzaSyBJsBK1UBIpYdzH-UgfTbNS9b_Ygqr6FV8',
         ),
         appId: String.fromEnvironment(
           'FIREBASE_APP_ID',
-          defaultValue: '1:123456789:web:demo',
+          defaultValue: emulator
+              ? '1:123456789:web:demo'
+              : '1:429747586374:android:0456200127afbe16b1d147',
         ),
         messagingSenderId: String.fromEnvironment(
           'FIREBASE_SENDER_ID',
-          defaultValue: '123456789',
+          defaultValue: emulator ? '123456789' : '429747586374',
         ),
         projectId: String.fromEnvironment(
           'FIREBASE_PROJECT_ID',
-          defaultValue: 'demo-tai-xiu',
+          defaultValue: emulator ? 'demo-tai-xiu' : 'ad2-8abfa540',
         ),
         authDomain: String.fromEnvironment(
           'FIREBASE_AUTH_DOMAIN',
-          defaultValue: 'demo-tai-xiu.firebaseapp.com',
+          defaultValue: emulator
+              ? 'demo-tai-xiu.firebaseapp.com'
+              : 'ad2-8abfa540.firebaseapp.com',
         ),
       ),
     );

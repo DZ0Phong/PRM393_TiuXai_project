@@ -30,7 +30,7 @@
    ```
 
    Đợi thấy Auth `9099`, Firestore `8080`, Functions `5001`; nếu cổng bận, dừng tiến trình chiếm cổng thay vì đổi cổng một phía. Không cần `firebase login` cho project demo local.
-4. Bật Android Emulator trong Device Manager; bấm Run cấu hình Flutter `lib/main.dart` ở Android Studio, hoặc terminal 2 chạy `flutter devices` rồi `flutter run -d <android-device-id>`. **Dùng Debug**, không cài APK release chưa cấu hình Firebase thật. App debug tự dùng `demo-tai-xiu` và host `10.0.2.2` cho Android Emulator. Trên cùng máy có thể `flutter run -d chrome` với `127.0.0.1`.
+4. Bật Android Emulator trong Device Manager; bấm Run cấu hình Flutter `lib/main.dart` ở Android Studio, hoặc terminal 2 chạy `flutter devices` rồi `flutter run -d <android-device-id>`. **Dùng Debug**; app debug mặc định trỏ Firebase Emulator ở `10.0.2.2`, không tự ghi vào project thật. Trên cùng máy có thể `flutter run -d chrome` với `127.0.0.1`.
 5. Đăng ký hai tài khoản khác nhau bằng form để test player. Muốn mở menu admin, chạy script seed bên dưới **trong lúc Emulator đang bật**, sau đó đăng nhập `admin@demo.test` / `Demo123456!` và đổi tài khoản player khi cần. Đây là mật khẩu **công khai chỉ cho Emulator**, tuyệt đối không dùng với Firebase thật.
 
    ```powershell
@@ -42,6 +42,12 @@
    Nếu đã có UID tài khoản riêng và muốn cấp admin cho UID đó, dùng `node functions/scripts/set-admin.js UID_CUA_BAN` với cùng hai biến môi trường trên, rồi **đăng xuất/đăng nhập** để refresh quyền. Không cấp admin cho tài khoản thử nghiệm không tin cậy.
 
 **Nếu không chạy được:** kiểm tra terminal Emulator còn sống, `flutter doctor -v`, đúng Android Emulator (không phải điện thoại thật), đúng project `demo-tai-xiu` và đúng cổng. Lỗi `Không kết nối được Firebase` trên điện thoại thật là do `10.0.2.2` chỉ dành cho Android Emulator; xem mục dưới về `EMULATOR_HOST`. Dữ liệu local của từng máy là dữ liệu thử nghiệm, có thể mất khi Emulator dừng; đừng dùng nó làm dữ liệu chung của nhóm.
+
+## Nhánh `firebase` và project Spark thật
+
+Đã merge cấu hình Android của thành viên cho project `ad2-8abfa540`: package `vn.teamfive.tai_xiu_realtime` và `google-services.json`. Flutter khởi tạo bằng `FirebaseOptions` tương ứng trong `lib/main.dart`; không cần thêm Gradle plugin Google Services (máy offline không resolve được plugin đó). `.firebaserc` giữ `default=demo-tai-xiu` để lệnh CLI không vô tình tác động project thật; alias `live` chỉ dùng khi cố ý chỉ định `--project ad2-8abfa540`. File JSON/API key Firebase là định danh client công khai, **không** chứng minh Auth, Firestore, rules hay Functions đã triển khai.
+
+**Spark không deploy được Cloud Functions**, trong khi đăng ký hồ sơ/ví, đặt cược, chốt phiên và bàn bài đều gọi Functions. Vì thế **chưa có APK chơi chung qua Cloud**: debug APK bên dưới chỉ chạy đầy đủ khi có bộ Emulator trên cùng máy. `flutter run --dart-define=EMULATORS=false` sẽ thử nối Auth/Firestore thật nhưng các chức năng game chưa chạy khi Functions chưa deploy; không dùng làm bản phát lớp. Máy này chưa đăng nhập Firebase CLI nên chưa xác minh được trạng thái Auth/Firestore hoặc deploy rules trên project thật. Không đổi sang Blaze hay triển khai bất kỳ dịch vụ có thể tính phí nếu nhóm chưa quyết định.
 
 ## Chạy local
 
@@ -59,7 +65,7 @@ Mở terminal khác:
 flutter run -d <android-device-id>
 ```
 
-Android Emulator mặc định truy cập host qua `10.0.2.2`; thiết bị thật cần `--dart-define=EMULATOR_HOST=<IP-LAN>` và kết nối cùng mạng. Không mở public Emulator. Có thể dùng `flutter run -d chrome` trên cùng máy với host mặc định `127.0.0.1`. Debug mặc định dùng Emulator với API key giả có định dạng hợp lệ cho Android (không có quyền truy cập project thật); release mặc định **không** dùng Emulator và từ chối chạy nếu vẫn là project demo. Cấu hình Firebase thật qua các `--dart-define` tên `FIREBASE_*` trong `lib/main.dart`; không commit secret/service account. Dự án Firebase thật cần bật Email/Password, Firestore, Functions, thiết lập claim admin, kiểm App Check và billing trước demo.
+Android Emulator mặc định truy cập host qua `10.0.2.2`; thiết bị thật cần `--dart-define=EMULATOR_HOST=<IP-LAN>` và kết nối cùng mạng. Không mở public Emulator. Có thể dùng `flutter run -d chrome` trên cùng máy với host mặc định `127.0.0.1`. Debug mặc định dùng `demo-tai-xiu`/Firebase Emulator với cấu hình giả, kể cả khi `google-services.json` chứa project thật; release mặc định dùng cấu hình Android thật và **không** dùng Emulator. Cấu hình Firebase Android thật nằm trong `android/app/google-services.json`, `.firebaserc` alias `live` và các giá trị mặc định `FIREBASE_*` trong `lib/main.dart`; có thể ghi đè bằng `--dart-define`. Đây là định danh client, **không** phải quyền truy cập admin. Không commit service account, token CLI hoặc keystore. Xem mục Firebase Spark bên dưới trước khi thử kết nối project thật.
 
 Tạo user bằng form đăng ký. Cấp quyền admin **chỉ cho UID tin cậy** (Emulator):
 
@@ -82,7 +88,7 @@ npm.cmd --prefix functions run check
 node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test --test-concurrency=1 functions/integration/emulator.test.js functions/integration/card_tables.test.js"
 ```
 
-CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Clone repo chạy được với Firebase Emulator theo các lệnh trên; chưa phải bản APK cho các máy trong lớp. Chưa có APK release có chữ ký phân phối hay deploy production. Không đưa `google-services.json`, key ký APK hoặc mật khẩu vào Git.
+CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Clone repo chạy được với Firebase Emulator theo các lệnh trên; chưa phải bản APK cho các máy trong lớp. Chưa có APK release có chữ ký phân phối hay deploy production. `google-services.json` chỉ chứa cấu hình client đã được merge; không đưa key ký APK, mật khẩu, token CLI hoặc service account vào Git.
 
 ## Quy tắc và hạn chế
 
