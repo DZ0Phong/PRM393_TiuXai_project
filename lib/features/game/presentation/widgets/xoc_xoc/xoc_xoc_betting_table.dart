@@ -6,7 +6,6 @@ import '../game_win_effect.dart';
 /// Xóc Xóc play screen. Bets and outcomes remain server-authoritative.
 class XocXocBettingTable extends StatefulWidget {
   final String roundId;
-  final String mode;
   final String status;
   final int secondsLeft;
   final int balance;
@@ -19,7 +18,6 @@ class XocXocBettingTable extends StatefulWidget {
   const XocXocBettingTable({
     super.key,
     required this.roundId,
-    required this.mode,
     required this.status,
     required this.secondsLeft,
     required this.balance,
@@ -259,9 +257,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            widget.status == 'open'
-                ? widget.mode.toUpperCase()
-                : '${widget.mode.toUpperCase()} • ${widget.status.toUpperCase()}',
+            widget.status.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -682,7 +678,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: Text(
-              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 điểm; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả ngẫu nhiên do máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
+              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 điểm; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả được máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
               style: TextStyle(
                 color: Color(0xffd8c3ad),
                 height: 1.45,

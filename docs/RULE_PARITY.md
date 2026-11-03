@@ -23,7 +23,7 @@ Với ante Ba Cây nhỏ như 10 xu, `floor(0,98×ante)` làm phí hiệu dụng
 - **Bầu Cua:** `Controllers/game/baucua/regOpen.js` trả 10 phiên mới, client hiện ba mặt của từng phiên; `BauCua_temp.js` giữ tần suất tích lũy. App hiện có 15 phiên mới và đếm mặt **chỉ trong cửa sổ đó**; không gọi đó là tần suất toàn lịch sử.
 - **Poker/Ba Cây nhiều người:** chưa tìm thấy cầu công khai tương ứng trong client/backend đã khảo sát; đừng biến bảng thắng thành “dự đoán cầu”. App có danh sách 10 bàn đã chốt gần nhất theo trò, không gọi đó là cầu dự đoán; không có biểu đồ cầu kiểu Tài/Xỉu cho Poker/Ba Cây.
 
-Cầu chỉ mô tả kết quả đã chốt, **không dự đoán** hay thay đổi thuật toán chốt. Kết quả admin chọn và random lưu cùng định dạng; widget cầu không hiển thị `mode`, nhưng tài liệu phiên Firestore công khai **có** `mode`. Actor/lý do/credit chi tiết chỉ nằm trong audit admin. Query lịch sử cần index `game/status/settledAt` trong `firestore.indexes.json`.
+Cầu chỉ mô tả kết quả đã chốt, **không dự đoán** hay thay đổi thuật toán chốt. Kết quả admin chọn và random lưu cùng định dạng; widget cầu và tài liệu phiên Firestore mới đều không hiển thị `mode`/`plannedAt`; dữ liệu phiên cũ cần dọn trước khi cho player truy cập. Actor/lý do/credit chi tiết chỉ nằm trong audit admin. Query lịch sử cần index `game/status/settledAt` trong `firestore.indexes.json`.
 
 ## Chưa kiểm chứng
 

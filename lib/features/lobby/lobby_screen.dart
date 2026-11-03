@@ -328,7 +328,7 @@ class _LobbyState extends State<LobbyScreen> {
                           ),
                         ),
                         Text(
-                          'Sự kiện mô phỏng • thử vận may bằng xu ảo',
+                          'Sự kiện mô phỏng • chơi bằng xu ảo',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
@@ -385,8 +385,8 @@ class _LobbyState extends State<LobbyScreen> {
                 ),
                 const SizedBox(height: 12),
                 _LobbyFeatureCard(
-                  title: 'TÀI XỈU MD5',
-                  subtitle: 'MINH BẠCH TUYỆT ĐỐI',
+                  title: 'TÀI XỈU',
+                  subtitle: 'PHIÊN XU ẢO',
                   image:
                       'https://lh3.googleusercontent.com/aida-public/AB6AXuDeMqYuqzSaqh4DvO1vsE5pglfE-DCLDv6gGhwi9BV0smraVE9sAqf-Migo9H0j73HAsLVL339cQ3Nh79tCezLQSQFw6V0Bl_a50DxMDeBgSstUkeCpOqndGAYbRtyT7V9ok8dnDv2dzzTaPqg4hCfWKxPJ6Dd5jshKLoPDaTCkm49ng275W8VIU2mKA6KHUn0yEn1wdCW41bj0knAwOYU2Bk_BOcc4Ch07WIlDj9k',
                   tag: 'HOT NHẤT',
@@ -545,7 +545,7 @@ class _LobbyState extends State<LobbyScreen> {
                     border: Border.all(color: const Color(0xff534434)),
                   ),
                   child: const Text(
-                    'CHỈ XU ẢO • Không có tiền thật, nạp/rút hay giải thưởng. ADMIN chọn kết quả sau khi khóa cược; RANDOM do máy chủ quyết định.',
+                    'CHỈ XU ẢO • Không có tiền thật, nạp/rút hay giải thưởng. Kết quả phiên do máy chủ xử lý theo luật trò chơi.',
                     style: TextStyle(color: Color(0xffd8c3ad), fontSize: 12),
                   ),
                 ),

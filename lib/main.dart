@@ -330,7 +330,6 @@ class _RoundScreenState extends State<RoundScreen> {
     required String roundId,
     required Map<String, dynamic> round,
     required String status,
-    required bool adminMode,
     required bool offline,
   }) => Card(
     color: const Color(0xff191c22),
@@ -356,11 +355,9 @@ class _RoundScreenState extends State<RoundScreen> {
             ],
           ),
           const SizedBox(height: 7),
-          Text(
-            adminMode
-                ? 'Chọn kết quả một lần trước khi hết giờ cược; backend tự chốt khi hết hạn.'
-                : 'Có thể chọn kết quả một lần trước khi hết giờ cược; nếu không, server sinh ngẫu nhiên.',
-            style: const TextStyle(
+          const Text(
+            'Có thể chọn kết quả một lần trước khi hết giờ cược; nếu không, server sinh ngẫu nhiên.',
+            style: TextStyle(
               color: Color(0xffd8c3ad),
               fontSize: 12,
               height: 1.4,
@@ -449,23 +446,35 @@ class _RoundScreenState extends State<RoundScreen> {
               ),
             ),
           ],
-          if (status == 'open' && round['plannedAt'] == null)
-            ValueListenableBuilder<DateTime>(
-              valueListenable: now,
-              builder: (context, time, _) => RoundOutcomePicker(
-                game: widget.game,
-                round: round,
-                enabled:
-                    !busy &&
-                    !offline &&
-                    (_roundDeadline(round)?.isAfter(time) ?? false),
-                onSelected: (choice) => settle(roundId, choice.result),
-              ),
-            ),
-          if (round['plannedAt'] != null)
-            const Text(
-              'Kết quả đã chọn, không thể sửa; server chốt sau hạn cược.',
-            ),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .doc('roundPlans/$roundId')
+                .snapshots(),
+            builder: (context, plan) {
+              if (plan.hasError) {
+                return Text('Không tải được lựa chọn: ${plan.error}');
+              }
+              if (!plan.hasData) return const LinearProgressIndicator();
+              if (plan.data!.exists) {
+                return const Text(
+                  'Kết quả đã chọn, không thể sửa; server chốt sau hạn cược.',
+                );
+              }
+              if (status != 'open') return const SizedBox.shrink();
+              return ValueListenableBuilder<DateTime>(
+                valueListenable: now,
+                builder: (context, time, _) => RoundOutcomePicker(
+                  game: widget.game,
+                  round: round,
+                  enabled:
+                      !busy &&
+                      !offline &&
+                      (_roundDeadline(round)?.isAfter(time) ?? false),
+                  onSelected: (choice) => settle(roundId, choice.result),
+                ),
+              );
+            },
+          ),
           if (status == 'open' || status == 'locked')
             TextButton.icon(
               onPressed: busy || offline
@@ -724,7 +733,6 @@ class _RoundScreenState extends State<RoundScreen> {
                         room.data!.metadata.isFromCache ||
                         snapshot.data!.metadata.isFromCache;
                     final status = round['status']?.toString() ?? 'không rõ';
-                    final adminMode = round['mode'] == 'admin';
                     return Card(
                       color:
                           widget.game.id == 'tai_xiu' ||
@@ -750,9 +758,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                 style: Theme.of(context).textTheme.labelLarge,
                               ),
                               Text(
-                                adminMode
-                                    ? 'ADMIN • Quản trị có thể chọn kết quả'
-                                    : 'RANDOM • Máy chủ chọn kết quả',
+                                'Phiên do máy chủ xử lý',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleMedium,
@@ -808,7 +814,6 @@ class _RoundScreenState extends State<RoundScreen> {
                                 roundId: id,
                                 round: round,
                                 status: status,
-                                adminMode: adminMode,
                                 offline: offline,
                               ),
                             if (!widget.isAdmin && widget.game.id == 'tai_xiu')
@@ -862,8 +867,6 @@ class _RoundScreenState extends State<RoundScreen> {
                                             return TaiXiuBettingTable(
                                               key: ValueKey('tai_xiu_$id'),
                                               roundId: id,
-                                              mode:
-                                                  '${round['mode'] ?? 'random'}',
                                               status: status,
                                               secondsLeft: secondsLeft,
                                               balance: balance is int
@@ -1070,8 +1073,6 @@ class _RoundScreenState extends State<RoundScreen> {
                                             }
                                             return XocXocBettingTable(
                                               roundId: id,
-                                              mode:
-                                                  '${round['mode'] ?? 'random'}',
                                               status: status,
                                               secondsLeft: secondsLeft,
                                               balance: balance is int

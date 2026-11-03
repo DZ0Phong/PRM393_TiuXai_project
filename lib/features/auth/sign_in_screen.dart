@@ -1053,11 +1053,11 @@ class _SignInScreenState extends State<SignInScreen> {
                         alignment: PlaceholderAlignment.middle,
                         child: GestureDetector(
                           onTap: () => _showInfoDialog(
-                            'Quy Tắc Cược Công Bằng',
-                            'Mọi kết quả được xử lý an toàn tại Cloud Functions và lưu trữ minh bạch trên Firestore.',
+                            'Quy tắc trò chơi',
+                            'Kết quả và điểm ảo được máy chủ xử lý theo luật từng trò; ứng dụng không cam kết mọi phiên ngẫu nhiên độc lập.',
                           ),
                           child: const Text(
-                            'Quy tắc cược công bằng',
+                            'Quy tắc trò chơi',
                             style: TextStyle(
                               color: Color(0xffffc174),
                               fontSize: 11,
@@ -1550,8 +1550,8 @@ class _SignInScreenState extends State<SignInScreen> {
           _buildBenefitRow(
             icon: Icons.casino,
             iconColor: const Color(0xffffb3ad),
-            title: 'Minh Bạch Thuật Toán & Audit Log',
-            desc: 'Chống trùng lặp giao dịch, ghi nhận minh bạch trên sổ cái',
+            title: 'Ghi nhận giao dịch xu ảo',
+            desc: 'Chống trùng lặp giao dịch, lưu lịch sử điểm ảo',
           ),
         ],
       ),

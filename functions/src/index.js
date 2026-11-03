@@ -1,7 +1,7 @@
 'use strict';
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
-const {getFirestore, Timestamp} = require('firebase-admin/firestore');
+const {getFirestore, Timestamp, FieldValue} = require('firebase-admin/firestore');
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const games = require('./round_games');
@@ -71,7 +71,6 @@ async function ensureAutomaticRound(game, actor) {
     }
     tx.create(next, {
       game,
-      mode: 'random',
       status: 'open',
       closesAt: Timestamp.fromMillis(Date.now() + ROUND_SECONDS * 1000),
       createdAt: now(),
@@ -249,7 +248,7 @@ exports.startRound = call(async (req) => {
     const roomSnap = await tx.get(room);
     const previous = roomSnap.exists && validId(roomSnap.data().roundId) ? await tx.get(db.doc(`rounds/${roomSnap.data().roundId}`)) : null;
     if (previous?.exists && !['settled', 'cancelled'].includes(previous.data().status)) fail('Phiên trước chưa kết thúc');
-    tx.create(ref, {game, mode, status: 'open', closesAt: Timestamp.fromMillis(Date.now() + 30000), createdAt: now(), betCount: 0, ...emptyBetStats(game)});
+    tx.create(ref, {game, status: 'open', closesAt: Timestamp.fromMillis(Date.now() + 30000), createdAt: now(), betCount: 0, ...emptyBetStats(game)});
     tx.set(room, {roundId: ref.id, game});
     audit(tx, req.auth.uid, 'START', {roundId: ref.id, game, mode});
   });
@@ -358,8 +357,8 @@ exports.lockRound = call(async (req) => {
   return lock(id(req.data?.roundId), 'scheduler');
 });
 
-// A private plan is committed while betting is open. The public round only
-// advertises admin mode; the actual dice/coins stay unreadable to players.
+// A private plan is committed while betting is open. New public rounds do
+// not change on selection, so their snapshots cannot reveal that event.
 exports.setRoundOutcome = call(async (req) => {
   admin(req);
   const roundId = id(req.data?.roundId), why = reason(req.data?.reason);
@@ -375,7 +374,8 @@ exports.setRoundOutcome = call(async (req) => {
       throw new HttpsError('invalid-argument', 'Kết quả không hợp lệ');
     const at = now();
     tx.create(plan, {game: data.game, result: req.data.result, reason: why, actor: req.auth.uid, at});
-    tx.update(ref, {mode: 'admin', plannedAt: at});
+    if ('mode' in data || 'plannedAt' in data)
+      tx.update(ref, {mode: FieldValue.delete(), plannedAt: FieldValue.delete()});
     audit(tx, req.auth.uid, 'PLAN_OUTCOME', {game: data.game, roundId, result: req.data.result, reason: why});
     return {roundId, mode: 'admin'};
   });
@@ -409,7 +409,7 @@ async function settle(roundId, actor) {
       tx.update(b.ref, {credit, refund, settledAt: now()});
       tx.create(users[i].ref.collection('operations').doc(`result_${roundId}`), {kind: 'payout', game: data.game, roundId, delta: credit, refund, balance, at: now()});
     });
-    tx.update(ref, {status: 'settled', mode, result, outcome: games.describeOutcome(data.game, result), settledAt: now()});
+    tx.update(ref, {status: 'settled', mode: FieldValue.delete(), plannedAt: FieldValue.delete(), result, outcome: games.describeOutcome(data.game, result), settledAt: now()});
     audit(tx, actor, 'SETTLE', {game: data.game, roundId, mode, result, reason: auditReason, plannedBy: chosen?.actor || null, credits});
     return {ok: true};
   });

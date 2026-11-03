@@ -109,6 +109,9 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       ['xoc_xoc', 'chan', [0, 1, 0, 1], 1980],
     ]) {
       const {roundId} = await boss.call('startRound', {game, mode: 'admin'});
+      const initial = (await db.doc(`rounds/${roundId}`).get()).data();
+      assert.equal(Object.hasOwn(initial, 'mode'), false);
+      assert.equal(Object.hasOwn(initial, 'plannedAt'), false);
       await assert.rejects(boss.call('startRound', {game, mode: 'random'}));
       await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
       await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
@@ -120,17 +123,23 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       assert.ok((await db.doc(`rounds/${roundId}/bets/${p.user.uid}`).get()).data().nickname);
       await assert.rejects(p.call('setRoundOutcome', {roundId, result, reason: 'Không có quyền'}));
       await assert.rejects(boss.call('setRoundOutcome', {roundId, result: [9, 9, 9], reason: 'Không hợp lệ'}));
+      const beforePlan = await db.doc(`rounds/${roundId}`).get();
       await boss.call('setRoundOutcome', {roundId, result, reason: 'Bài kiểm thử'});
       await assert.rejects(boss.call('setRoundOutcome', {roundId, result, reason: 'Không đổi được'}));
-      const pending = (await db.doc(`rounds/${roundId}`).get()).data();
+      const publicAfterPlan = await db.doc(`rounds/${roundId}`).get();
+      assert.equal(publicAfterPlan.updateTime.toMillis(), beforePlan.updateTime.toMillis());
+      const pending = publicAfterPlan.data();
       assert.equal(pending.result, undefined);
-      assert.equal(pending.mode, 'admin');
+      assert.equal(Object.hasOwn(pending, 'mode'), false);
+      assert.equal(Object.hasOwn(pending, 'plannedAt'), false);
       assert.deepEqual((await db.doc(`roundPlans/${roundId}`).get()).data().result, result);
       await db.doc(`rounds/${roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
       await assert.rejects(boss.call('setRoundOutcome', {roundId, result, reason: 'Đã muộn'}));
       await Promise.all([1, 2].map(() => p.call('advanceRandomRound', {roundId})));
       const round = (await db.doc(`rounds/${roundId}`).get()).data();
       assert.equal(round.status, 'settled'); assert.equal(round.reason, undefined);
+      assert.equal(Object.hasOwn(round, 'mode'), false);
+      assert.equal(Object.hasOwn(round, 'plannedAt'), false);
       assert.deepEqual(round.result, result);
       assert.equal((await db.doc(`rounds/${roundId}/bets/${p.user.uid}`).get()).data().credit, credit);
       assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${roundId}`).get()).data().delta, credit);

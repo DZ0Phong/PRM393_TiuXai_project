@@ -8,7 +8,6 @@ import 'tai_xiu_dice.dart';
 /// a stake locally; the server remains the authority for accepting bets.
 class TaiXiuBettingTable extends StatefulWidget {
   final String roundId;
-  final String mode;
   final String status;
   final int secondsLeft;
   final int balance;
@@ -25,7 +24,6 @@ class TaiXiuBettingTable extends StatefulWidget {
   const TaiXiuBettingTable({
     super.key,
     required this.roundId,
-    required this.mode,
     required this.status,
     required this.secondsLeft,
     required this.balance,
@@ -344,56 +342,6 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xff191c22),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xff534434)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.flag_outlined, color: gold, size: 16),
-                const SizedBox(width: 7),
-                const Expanded(
-                  child: Text(
-                    'CHẾ ĐỘ PHIÊN',
-                    style: TextStyle(
-                      color: Color(0xffd8c3ad),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.mode == 'admin'
-                        ? const Color(0xff5c2530)
-                        : const Color(0xff19372d),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    widget.mode == 'admin'
-                        ? 'ADMIN CHỌN KẾT QUẢ'
-                        : 'RANDOM • MÁY CHỦ',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xffe1e2eb),
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 7),
           _dealerStream(),
           const SizedBox(height: 8),
           Container(

@@ -180,19 +180,13 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                   badge: 'ĐỌC KỸ',
                   badgeColor: _termsMint,
                   description:
-                      'Luật từng trò được mô tả trong project. Kết quả phiên được xử lý bởi Cloud Functions theo chế độ của phiên.',
+                      'Luật từng trò được mô tả trong project. Kết quả phiên được xử lý bởi Cloud Functions; đây không phải hệ thống chứng minh tính ngẫu nhiên công bằng.',
                   children: const [
                     _TermsBullet(
-                      icon: Icons.shuffle,
-                      title: 'Chế độ random:',
+                      icon: Icons.cloud_done_outlined,
+                      title: 'Xử lý kết quả:',
                       detail:
-                          'Máy chủ chọn kết quả ngẫu nhiên theo luật của trò chơi.',
-                    ),
-                    _TermsBullet(
-                      icon: Icons.admin_panel_settings_outlined,
-                      title: 'Chế độ admin:',
-                      detail:
-                          'Quản trị viên có thể chọn kết quả hợp lệ sau khi khóa cược. Chế độ được hiển thị trước khi đặt cược; phiên admin không phải kết quả random độc lập.',
+                          'Máy chủ công bố kết quả hợp lệ và thanh toán điểm ảo theo luật của từng trò. Không cam kết mọi phiên được sinh ngẫu nhiên độc lập.',
                     ),
                     _TermsBullet(
                       icon: Icons.fact_check_outlined,
@@ -520,7 +514,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
         ),
         SizedBox(height: 5),
         Text(
-          'Chế độ admin có thể chọn kết quả hợp lệ sau khi khóa cược. Hãy kiểm tra chế độ phiên trước khi tham gia; không xem các phiên này là trò chơi ngẫu nhiên công bằng.',
+          'Đây là bản mô phỏng dùng điểm ảo. Kết quả hợp lệ được máy chủ xử lý; ứng dụng không cam kết hoặc chứng minh mọi phiên là ngẫu nhiên độc lập.',
           textAlign: TextAlign.center,
           style: TextStyle(color: _termsMuted, fontSize: 11, height: 1.45),
         ),
