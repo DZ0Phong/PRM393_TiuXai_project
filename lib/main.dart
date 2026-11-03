@@ -134,7 +134,7 @@ class GameApp extends StatelessWidget {
         }
         final user = snapshot.data;
         return user == null
-            ? const SignInScreen()
+            ? const SignInScreen(showDemoAdmin: emulator)
             : AuthenticatedEntryScreen(
                 key: ValueKey(user.uid),
                 user: user,

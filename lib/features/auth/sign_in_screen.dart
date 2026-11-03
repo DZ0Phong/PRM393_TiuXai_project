@@ -1,14 +1,13 @@
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart' hide Text;
 
 import '../../core/app_text.dart';
 
-import 'password_recovery_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   final bool initialRegisterTab;
-  const SignInScreen({super.key, this.initialRegisterTab = false});
+  final bool showDemoAdmin;
+  const SignInScreen({super.key, this.initialRegisterTab = false, this.showDemoAdmin = false});
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -21,33 +20,17 @@ class _SignInScreenState extends State<SignInScreen> {
   final _loginAccountController = TextEditingController();
   final _loginPasswordController = TextEditingController();
   bool _obscureLoginPassword = true;
-  bool _rememberMe = true;
 
   // Controllers cho Đăng Ký
-  final _regNicknameController = TextEditingController(text: 'hoangtutaixiu99');
-  final _regPasswordController = TextEditingController(text: 'HoangGiaVIP@2025');
-  final _regConfirmPasswordController = TextEditingController(text: 'HoangGiaVIP@2025');
-  final _regPhoneController = TextEditingController();
-  final _regGiftcodeController = TextEditingController(text: 'VIPTAIXIU100K');
+  final _regNicknameController = TextEditingController();
+  final _regPasswordController = TextEditingController();
+  final _regConfirmPasswordController = TextEditingController();
   bool _obscureRegPassword = true;
   bool _obscureRegConfirm = true;
   bool _regTermsAccepted = true;
-  bool _giftcodeApplied = true;
 
   bool _busy = false;
   String? _errorMessage;
-  bool _soundEnabled = true;
-
-  // Marquee simulated winners
-  int _winnerIndex = 0;
-  Timer? _winnerTimer;
-  final List<String> _simulatedWinners = const [
-    'User vip_88*** vừa nổ hũ +145.000 Xu (Bão Tam 6)',
-    'User dai_gia*** vừa ăn Tài +98.000 Xu phiên #8821',
-    'User poker_pro*** vừa thắng Pot +260.000 Xu bàn VIP',
-    'Tân thủ hoang_gia*** vừa nhận +10.000 Xu khởi nghiệp',
-    'User thantai_*** vừa thắng Bầu Cua 3 Cua +120.000 Xu',
-  ];
 
   @override
   void initState() {
@@ -58,26 +41,15 @@ class _SignInScreenState extends State<SignInScreen> {
     _regNicknameController.addListener(() => setState(() {}));
     _regPasswordController.addListener(() => setState(() {}));
     _regConfirmPasswordController.addListener(() => setState(() {}));
-
-    _winnerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) {
-        setState(() {
-          _winnerIndex = (_winnerIndex + 1) % _simulatedWinners.length;
-        });
-      }
-    });
   }
 
   @override
   void dispose() {
-    _winnerTimer?.cancel();
     _loginAccountController.dispose();
     _loginPasswordController.dispose();
     _regNicknameController.dispose();
     _regPasswordController.dispose();
     _regConfirmPasswordController.dispose();
-    _regPhoneController.dispose();
-    _regGiftcodeController.dispose();
     super.dispose();
   }
 
@@ -101,7 +73,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool get _isNicknameValid {
     final nick = _regNicknameController.text.trim();
-    return nick.length >= 4 && nick.length <= 20 && !nick.contains(' ');
+    if (!widget.showDemoAdmin) return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(nick);
+    return nick.length >= 4 && nick.length <= 20 && !nick.contains(' ') && !nick.contains('@');
   }
 
   bool get _isPasswordMatch {
@@ -150,8 +123,10 @@ class _SignInScreenState extends State<SignInScreen> {
     final pwd = _regPasswordController.text;
     final confirmPwd = _regConfirmPasswordController.text;
 
-    if (nick.isEmpty || nick.length < 4) {
-      setState(() => _errorMessage = 'Tên đăng nhập phải từ 4 - 20 ký tự.');
+    if (!_isNicknameValid) {
+      setState(() => _errorMessage = widget.showDemoAdmin
+          ? 'Tên đăng nhập phải từ 4–20 ký tự, viết liền, không có @.'
+          : 'Hãy dùng địa chỉ email thật để có thể khôi phục tài khoản.');
       return;
     }
     if (pwd.length < 6) {
@@ -174,7 +149,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
     try {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _formatEmail(nick),
+        email: widget.showDemoAdmin ? _formatEmail(nick) : nick,
         password: pwd,
       );
     } on FirebaseAuthException catch (e) {
@@ -316,14 +291,6 @@ class _SignInScreenState extends State<SignInScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Exclusive VIP Benefits (Đặc quyền hội viên hoàng gia)
-                          _buildVipBenefitsCard(),
-                          const SizedBox(height: 16),
-
-                          // Live Marquee Nổ Hũ
-                          _buildMarqueeWinner(),
-                          const SizedBox(height: 16),
-
                           // Bottom Navigation & Support
                           _buildBottomFooter(),
                           const SizedBox(height: 20),
@@ -358,7 +325,7 @@ class _SignInScreenState extends State<SignInScreen> {
               Icon(Icons.verified, color: Color(0xffffc174), size: 18),
               SizedBox(width: 6),
               Text(
-                'VIP MACAU SALON',
+                'TIU XAI • PRM393',
                 style: TextStyle(
                   color: Color(0xffffc174),
                   fontSize: 11,
@@ -370,8 +337,7 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
           Row(
             children: [
-              // Nút Demo Admin tiện lợi
-              InkWell(
+              if (widget.showDemoAdmin) InkWell(
                 onTap: _fillQuickAdmin,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
@@ -397,28 +363,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-
-              // Sound Toggle
-              IconButton(
-                iconSize: 18,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                icon: Icon(
-                  _soundEnabled ? Icons.volume_up : Icons.volume_off,
-                  color: const Color(0xffd8c3ad),
-                ),
-                tooltip: 'Âm thanh',
-                onPressed: () {
-                  setState(() => _soundEnabled = !_soundEnabled);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      duration: const Duration(seconds: 1),
-                      content: Text(_soundEnabled ? 'Đã bật âm thanh' : 'Đã tắt âm thanh'),
-                    ),
-                  );
-                },
-              ),
+              if (widget.showDemoAdmin) const SizedBox(width: 8),
 
               // CSKH 24/7
               IconButton(
@@ -426,10 +371,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 icon: const Icon(Icons.support_agent, color: Color(0xffffc174)),
-                tooltip: 'CSKH 24/7',
+                tooltip: 'Thông tin dự án',
                 onPressed: () => _showInfoDialog(
                   'Hỗ Trợ Khách Hàng',
-                  'Hệ thống game điểm ảo PRM393.\nHotline VIP: 1900 8888\nEmail: cskh@tiuxai.edu.vn',
+                  'Dự án học tập PRM393: chỉ dùng điểm ảo. Liên hệ trực tiếp nhóm phát triển nếu cần hỗ trợ.',
                 ),
               ),
             ],
@@ -482,35 +427,6 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Tag Code Tân thủ
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xffa40217).withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(color: Colors.black45, blurRadius: 4),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.stars, color: Color(0xffffc174), size: 14),
-              SizedBox(width: 4),
-              Text(
-                'TẶNG CODE 100K CHO TÂN THỦ',
-                style: TextStyle(
-                  color: Color(0xffffdad7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-
         // Title
         Text(
           _isRegisterTab ? 'TẠO TÀI KHOẢN MỚI' : 'TÀI XỈU HOÀNG GIA',
@@ -524,8 +440,8 @@ class _SignInScreenState extends State<SignInScreen> {
         const SizedBox(height: 4),
         Text(
           _isRegisterTab
-              ? 'Gia nhập sảnh thượng lưu • Khởi nghiệp rực rỡ'
-              : 'CỔNG GAME QUỐC TẾ • ĐIỂM ẢO PRM393',
+              ? 'Tham gia dự án học tập • Chỉ dùng điểm ảo'
+              : 'DỰ ÁN HỌC TẬP • ĐIỂM ẢO PRM393',
           style: const TextStyle(
             color: Color(0xffa08e7a),
             fontSize: 12,
@@ -667,12 +583,14 @@ class _SignInScreenState extends State<SignInScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Field: Nickname
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
-              const Text(
-                'TÊN ĐĂNG NHẬP (NICKNAME)',
-                style: TextStyle(
+              Text(
+                widget.showDemoAdmin ? 'TÊN ĐĂNG NHẬP (NICKNAME)' : 'EMAIL CỦA BẠN',
+                style: const TextStyle(
                   color: Color(0xffffc174),
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -688,7 +606,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _isNicknameValid ? 'Hợp lệ' : 'Từ 4–20 ký tự',
+                    _isNicknameValid ? 'Hợp lệ' : (widget.showDemoAdmin ? 'Từ 4–20 ký tự' : 'Email thật'),
                     style: TextStyle(
                       color: _isNicknameValid ? const Color(0xff56e5a9) : const Color(0xffa08e7a),
                       fontSize: 11,
@@ -714,7 +632,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 suffixIcon: _isNicknameValid
                     ? const Icon(Icons.verified, color: Color(0xff56e5a9), size: 20)
                     : null,
-                hintText: 'Từ 6 - 16 ký tự viết liền',
+                hintText: widget.showDemoAdmin ? 'Từ 4–20 ký tự viết liền' : 'ban@example.com',
                 hintStyle: const TextStyle(color: Color(0xff534434), fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
@@ -869,142 +787,6 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Field: Số điện thoại / Zalo (Tùy chọn)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'SỐ ĐIỆN THOẠI / ZALO',
-                style: TextStyle(
-                  color: Color(0xffffc174),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Row(
-                children: [
-                  Icon(Icons.shield, color: Color(0xff4edea3), size: 12),
-                  SizedBox(width: 4),
-                  Text(
-                    'Bảo mật tài khoản',
-                    style: TextStyle(color: Color(0xff4edea3), fontSize: 11),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xff0b0e14),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0x33ffffff)),
-            ),
-            child: TextField(
-              controller: _regPhoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 14, letterSpacing: 1.0),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.phone_iphone, color: Color(0xffa08e7a), size: 20),
-                suffixIcon: Container(
-                  margin: const EdgeInsets.all(8),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xff272a31),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'OTP SMS',
-                    style: TextStyle(color: Color(0xffffc174), fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                hintText: 'Nhập số nhận OTP kích hoạt (tùy chọn)',
-                hintStyle: const TextStyle(color: Color(0xff534434), fontSize: 13),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Field: Mã giới thiệu / Giftcode
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'MÃ GIỚI THIỆU / GIFTCODE',
-                style: TextStyle(
-                  color: Color(0xffa08e7a),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Text(
-                '+100.000 XU',
-                style: TextStyle(
-                  color: Color(0xffffc174),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xff0b0e14),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0x33ffffff)),
-                  ),
-                  child: TextField(
-                    controller: _regGiftcodeController,
-                    style: const TextStyle(
-                      color: Color(0xffffc174),
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.card_giftcard, color: Color(0xffa08e7a), size: 20),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _giftcodeApplied ? const Color(0xff30c88f) : const Color(0xfff59e0b),
-                  foregroundColor: const Color(0xff003824),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                ),
-                onPressed: () {
-                  setState(() => _giftcodeApplied = true);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã kích hoạt Giftcode +100.000 Xu tân thủ!')),
-                  );
-                },
-                icon: Icon(
-                  _giftcodeApplied ? Icons.check : Icons.redeem,
-                  size: 16,
-                  color: const Color(0xff003824),
-                ),
-                label: Text(
-                  _giftcodeApplied ? 'Đã Áp Dụng' : 'Áp Dụng',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
           // Policy Acceptance Checkbox
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1138,10 +920,10 @@ class _SignInScreenState extends State<SignInScreen> {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: const [
-                            Icon(Icons.redeem, color: Color(0xff472a00), size: 22),
+                            Icon(Icons.person_add, color: Color(0xff472a00), size: 22),
                             SizedBox(width: 8),
                             Text(
-                              'ĐĂNG KÝ NHẬN THƯỞNG 100K',
+                              'ĐĂNG KÝ TÀI KHOẢN',
                               style: TextStyle(
                                 color: Color(0xff472a00),
                                 fontSize: 14,
@@ -1181,8 +963,10 @@ class _SignInScreenState extends State<SignInScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: const [
               Text(
                 'TÀI KHOẢN / EMAIL',
@@ -1192,10 +976,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.8,
                 ),
-              ),
-              Text(
-                'yêu cầu VIP ID',
-                style: TextStyle(color: Color(0xffffc174), fontSize: 10),
               ),
             ],
           ),
@@ -1239,16 +1019,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   letterSpacing: 0.8,
                 ),
               ),
-              Row(
-                children: [
-                  Icon(Icons.verified_user, color: Color(0xff56e5a9), size: 14),
-                  SizedBox(width: 4),
-                  Text(
-                    'SSL 256-BIT',
-                    style: TextStyle(color: Color(0xff56e5a9), fontSize: 10),
-                  ),
-                ],
-              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1279,71 +1049,6 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Checkbox(
-                      value: _rememberMe,
-                      activeColor: const Color(0xffffc174),
-                      checkColor: const Color(0xff472a00),
-                      onChanged: (v) => setState(() => _rememberMe = v ?? true),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Ghi nhớ phiên đăng nhập',
-                    style: TextStyle(color: Color(0xffe1e2eb), fontSize: 12),
-                  ),
-                ],
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const PasswordRecoveryScreen(),
-                  ),
-                ),
-                child: const Text(
-                  'Quên mật khẩu?',
-                  style: TextStyle(
-                    color: Color(0xffffc174),
-                    fontSize: 12,
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xff690005).withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xffffb4ab)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Color(0xffffb4ab), size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Color(0xffffdad6), fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 16),
 
           // CTA Nút Đăng Nhập
@@ -1401,255 +1106,6 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Hoặc kết nối nhanh
-          Row(
-            children: const [
-              Expanded(child: Divider(color: Color(0x33ffffff))),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  'HOẶC KẾT NỐI SIÊU TỐC',
-                  style: TextStyle(
-                    color: Color(0xffa08e7a),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-              Expanded(child: Divider(color: Color(0x33ffffff))),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              _buildSocialButton(
-                label: 'Facebook',
-                icon: Icons.facebook,
-                color: const Color(0xffffc174),
-                onTap: () => _showInfoDialog(
-                  'Kết nối Facebook',
-                  'Chức năng liên kết mạng xã hội đang cấu hình trong phiên bản thử nghiệm.',
-                ),
-              ),
-              const SizedBox(width: 8),
-              _buildSocialButton(
-                label: 'Telegram',
-                icon: Icons.send,
-                color: const Color(0xff56e5a9),
-                onTap: () => _showInfoDialog(
-                  'Telegram VIP Bot',
-                  'Bot hỗ trợ thông báo phiên và tặng xu ảo Telegram đang phát triển.',
-                ),
-              ),
-              const SizedBox(width: 8),
-              _buildSocialButton(
-                label: 'Google',
-                icon: Icons.g_mobiledata,
-                color: const Color(0xffffb4ab),
-                onTap: () => _showInfoDialog(
-                  'Đăng nhập Google',
-                  'Vui lòng dùng Email/Mật khẩu hoặc tài khoản demo để đăng nhập trực tiếp.',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSocialButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xff272a31),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0x1affffff)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xffe1e2eb),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- EXCLUSIVE VIP BENEFITS CARD ---
-  Widget _buildVipBenefitsCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xff191c22),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x1affffff)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.military_tech, color: Color(0xffffc174), size: 20),
-              SizedBox(width: 8),
-              Text(
-                'ĐẶC QUYỀN HỘI VIÊN HOÀNG GIA',
-                style: TextStyle(
-                  color: Color(0xffffc174),
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Benefit 1
-          _buildBenefitRow(
-            icon: Icons.bolt,
-            iconColor: const Color(0xffffc174),
-            title: 'Khởi Nghiệp 100K Xu Ảo',
-            desc: 'Khớp lệnh tự động 30 giây mô phỏng trải nghiệm thực tế',
-          ),
-          const SizedBox(height: 8),
-
-          // Benefit 2
-          _buildBenefitRow(
-            icon: Icons.enhanced_encryption,
-            iconColor: const Color(0xff56e5a9),
-            title: 'Bảo Mật OTP Chuẩn PRM393',
-            desc: 'Mã hóa Firebase Auth & Cloud Functions chống gian lận',
-          ),
-          const SizedBox(height: 8),
-
-          // Benefit 3
-          _buildBenefitRow(
-            icon: Icons.casino,
-            iconColor: const Color(0xffffb3ad),
-            title: 'Ghi nhận giao dịch xu ảo',
-            desc: 'Chống trùng lặp giao dịch, lưu lịch sử điểm ảo',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBenefitRow({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String desc,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xff272a31).withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xff32353c),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xffe1e2eb),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  desc,
-                  style: const TextStyle(
-                    color: Color(0xffa08e7a),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMarqueeWinner() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xff0b0e14).withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0x22ffc174)),
-      ),
-      child: Row(
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.military_tech, color: Color(0xffffc174), size: 18),
-              SizedBox(width: 4),
-              Text(
-                'Nổ Hũ:',
-                style: TextStyle(
-                  color: Color(0xffffc174),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: Text(
-                _simulatedWinners[_winnerIndex],
-                key: ValueKey(_winnerIndex),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xff56e5a9),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1664,7 +1120,7 @@ class _SignInScreenState extends State<SignInScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _isRegisterTab ? 'Đã có tài khoản VIP? ' : 'Chưa có tài khoản? ',
+                _isRegisterTab ? 'Đã có tài khoản? ' : 'Chưa có tài khoản? ',
                 style: const TextStyle(color: Color(0xffa08e7a), fontSize: 13),
               ),
               GestureDetector(
@@ -1693,39 +1149,8 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Support and Trust Badge
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Row(
-              children: [
-                Icon(Icons.support_agent, color: Color(0xff56e5a9), size: 14),
-                SizedBox(width: 4),
-                Text(
-                  'HỖ TRỢ CSKH 24/7',
-                  style: TextStyle(color: Color(0xffa08e7a), fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            SizedBox(width: 12),
-            Text('•', style: TextStyle(color: Color(0xff534434))),
-            SizedBox(width: 12),
-            Row(
-              children: [
-                Icon(Icons.verified_user, color: Color(0xffffc174), size: 14),
-                SizedBox(width: 4),
-                Text(
-                  'SSL 256-BIT',
-                  style: TextStyle(color: Color(0xffa08e7a), fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
         const Text(
-          'Bản quyền © 2026 Tài Xỉu Hoàng Gia VIP Salon • Dự án thực hành PRM393.\nChỉ dùng xu ảo, không tiền thật và không đổi thưởng.',
+          'Dự án thực hành PRM393. Chỉ dùng điểm ảo, không tiền thật và không đổi thưởng.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Color(0xff534434),
