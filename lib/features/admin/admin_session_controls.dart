@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../game/game_specs.dart';
 import '../game/round_bets.dart';
+import 'round_outcome_picker.dart';
 
 class AdminSessionControls extends StatefulWidget {
   final GameSpec game;
@@ -27,8 +28,9 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
   static const _muted = Color(0xffd8c3ad);
   static const _green = Color(0xff56e5a9);
 
-  final _reason = TextEditingController();
-  List<dynamic> _result = [];
+  final _reason = TextEditingController(
+    text: 'Điều hành phiên mô phỏng trong lớp',
+  );
   String _newSessionMode = 'random';
   String? _busyAction;
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
@@ -37,7 +39,6 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
   @override
   void initState() {
     super.initState();
-    _result = _defaultResult(widget.game);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _now.value = DateTime.now();
     });
@@ -50,12 +51,6 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
     _reason.dispose();
     super.dispose();
   }
-
-  List<dynamic> _defaultResult(GameSpec game) => switch (game.id) {
-    'bau_cua' => ['nai', 'bau', 'ga'],
-    'xoc_xoc' => [1, 0, 1, 0],
-    _ => [3, 4, 4],
-  };
 
   Future<void> _call(
     String action,
@@ -98,31 +93,6 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (_) => ',',
   );
-
-  String _preview() {
-    if (widget.game.id == 'tai_xiu') {
-      final dice = _result.cast<int>();
-      final total = dice.fold<int>(
-        0,
-        (runningTotal, value) => runningTotal + value,
-      );
-      final triple = dice[0] == dice[1] && dice[1] == dice[2];
-      return triple
-          ? 'Tổng: $total • BỘ BA'
-          : 'Tổng: $total • ${total >= 11 ? 'TÀI' : 'XỈU'}';
-    }
-    if (widget.game.id == 'bau_cua') {
-      final names = {for (final side in widget.game.sides) side.$1: side.$2};
-      return _result
-          .map((value) => names[value] ?? value.toString())
-          .join(' • ');
-    }
-    final red = _result.cast<int>().fold<int>(
-      0,
-      (runningTotal, value) => runningTotal + value,
-    );
-    return 'Có $red mặt đỏ • ${red.isEven ? 'CHẴN' : 'LẺ'}';
-  }
 
   Widget _surfaceCard({
     required Widget child,
@@ -252,7 +222,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
         ),
         if (active) ...[
           const SizedBox(height: 8),
-          _resultConsole(roundId, status, deadline),
+          _resultConsole(roundId, round, status, deadline),
         ],
         if (active) ...[
           const SizedBox(height: 8),
@@ -329,6 +299,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
 
   Widget _resultConsole(
     String roundId,
+    Map<String, dynamic> round,
     String status,
     Timestamp? deadline,
   ) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -364,31 +335,22 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
               ),
             ] else if (status == 'open') ...[
               const Text(
-                'Chọn một lần trước hạn cược. Kết quả không lộ cho người chơi trước khi chốt.',
+                'Xem cược từng cửa rồi chọn kết quả bằng một nút. Lựa chọn chỉ được ghi nhận trước khi hết giờ cược.',
                 style: TextStyle(color: _muted, fontSize: 9),
               ),
               const SizedBox(height: 7),
-              _resultSelectors(),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _preview(),
-                  style: const TextStyle(color: _gold, fontSize: 9),
-                ),
-              ),
               _reasonInput(),
               ValueListenableBuilder<DateTime>(
                 valueListenable: _now,
-                builder: (context, time, _) => FilledButton.icon(
-                  onPressed:
-                      _busyAction != null ||
-                          !_validReason ||
-                          deadline == null ||
-                          !deadline.toDate().isAfter(time)
-                      ? null
-                      : () => _plan(roundId),
-                  icon: const Icon(Icons.verified_outlined, size: 16),
-                  label: const Text('Chọn kết quả cho phiên này'),
+                builder: (context, time, _) => RoundOutcomePicker(
+                  game: widget.game,
+                  round: round,
+                  enabled:
+                      _busyAction == null &&
+                      _validReason &&
+                      deadline != null &&
+                      deadline.toDate().isAfter(time),
+                  onSelected: (choice) => _plan(roundId, choice.result),
                 ),
               ),
             ] else
@@ -477,91 +439,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
     },
   );
 
-  Widget _resultSelectors() {
-    final isBauCua = widget.game.id == 'bau_cua';
-    final count = widget.game.id == 'xoc_xoc' ? 4 : 3;
-    final options = isBauCua
-        ? widget.game.sides
-              .map((side) => (side.$1 as dynamic, side.$2))
-              .toList()
-        : (widget.game.id == 'xoc_xoc'
-              ? [(0, 'Trắng'), (1, 'Đỏ')]
-              : [
-                  (1, 'Nhất'),
-                  (2, 'Nhị'),
-                  (3, 'Tam'),
-                  (4, 'Tứ'),
-                  (5, 'Ngũ'),
-                  (6, 'Lục'),
-                ]);
-    return Row(
-      children: [
-        for (var index = 0; index < count; index++) ...[
-          if (index > 0) const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              children: [
-                Text(
-                  isBauCua
-                      ? 'Mặt ${index + 1}'
-                      : widget.game.id == 'xoc_xoc'
-                      ? 'Xu ${index + 1}'
-                      : 'Xúc xắc ${index + 1}',
-                  style: const TextStyle(color: _muted, fontSize: 7),
-                ),
-                const SizedBox(height: 3),
-                DropdownButtonFormField<dynamic>(
-                  key: ValueKey('${widget.game.id}-$index-${_result[index]}'),
-                  initialValue: _result[index],
-                  isExpanded: true,
-                  dropdownColor: const Color(0xff272a31),
-                  style: const TextStyle(color: _gold, fontSize: 9),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xff202329),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 7,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  items: [
-                    for (final option in options)
-                      DropdownMenuItem<dynamic>(
-                        value: option.$1,
-                        child: Text(
-                          isBauCua ? option.$2 : '${option.$1} (${option.$2})',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _gold,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _result[index] = value);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Future<void> _plan(String roundId) async {
-    final result = widget.game.id == 'bau_cua'
-        ? _result.cast<String>()
-        : _result.cast<int>();
+  Future<void> _plan(String roundId, List<dynamic> result) async {
     await _call('setRoundOutcome', {
       'roundId': roundId,
       'result': result,

@@ -8,6 +8,9 @@ const {getAuth: adminAuth} = require('firebase-admin/auth');
 const {getFirestore, Timestamp} = require('firebase-admin/firestore');
 const {register} = require('../src/card_tables');
 const poker = require('../src/poker_engine');
+const testPort = (key, fallback) => Number(process.env[key] || fallback);
+const authPort = testPort('TEST_AUTH_PORT', 9099);
+const functionsPort = testPort('TEST_FUNCTIONS_PORT', 5001);
 
 test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', async () => {
   const projectId = 'demo-tai-xiu';
@@ -15,8 +18,8 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
   const db = getFirestore(admin); const apps = [];
   async function client(i) {
     const app = initializeApp({projectId, apiKey: 'demo-key', appId: 'demo'}, `card-client-${i}-${Date.now()}`); apps.push(app);
-    const auth = getAuth(app); connectAuthEmulator(auth, 'http://127.0.0.1:9099', {disableWarnings: true});
-    const functions = getFunctions(app, 'asia-southeast1'); connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+    const auth = getAuth(app); connectAuthEmulator(auth, `http://127.0.0.1:${authPort}`, {disableWarnings: true});
+    const functions = getFunctions(app, 'asia-southeast1'); connectFunctionsEmulator(functions, '127.0.0.1', functionsPort);
     const {user} = await createUserWithEmailAndPassword(auth, `card-${i}-${Date.now()}@example.com`, 'password123');
     const call = async (name, data = {}) => (await httpsCallable(functions, name)(data)).data;
     await call('ensureProfile'); return {user, call};

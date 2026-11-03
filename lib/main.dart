@@ -12,6 +12,7 @@ import 'core/app_preferences.dart';
 import 'core/app_text.dart';
 import 'features/auth/sign_in_screen.dart';
 import 'features/admin/admin_console.dart';
+import 'features/admin/round_outcome_picker.dart';
 import 'features/lobby/lobby_screen.dart';
 import 'features/onboarding/presentation/screens/authenticated_entry_screen.dart';
 import 'features/game/game_specs.dart';
@@ -177,8 +178,9 @@ class RoundScreen extends StatefulWidget {
 
 class _RoundScreenState extends State<RoundScreen> {
   final amount = TextEditingController(text: '1000');
-  final result = TextEditingController();
-  final reason = TextEditingController();
+  final reason = TextEditingController(
+    text: 'Điều hành phiên mô phỏng trong lớp',
+  );
   final now = ValueNotifier(DateTime.now());
   Timer? timer;
   int gameNavIndex = 1;
@@ -208,7 +210,6 @@ class _RoundScreenState extends State<RoundScreen> {
     unawaited(_leaveRoom());
     now.dispose();
     amount.dispose();
-    result.dispose();
     reason.dispose();
     super.dispose();
   }
@@ -298,21 +299,14 @@ class _RoundScreenState extends State<RoundScreen> {
     }
   }
 
-  void settle(String id) {
-    final parsed = parseRoundResult(widget.game, result.text);
-    if (parsed == null) {
-      setState(
-        () => message = 'Kết quả không hợp lệ. ${widget.game.resultHint}.',
-      );
-      return;
-    }
+  void settle(String id, List<dynamic> selected) {
     if (reason.text.trim().length < 5 || reason.text.length > 300) {
       setState(() => message = 'Nhập lý do từ 5 đến 300 ký tự.');
       return;
     }
     call('setRoundOutcome', {
       'roundId': id,
-      'result': parsed,
+      'result': selected,
       'reason': reason.text.trim(),
     });
   }
@@ -455,28 +449,19 @@ class _RoundScreenState extends State<RoundScreen> {
               ),
             ),
           ],
-          if (status == 'open' && round['plannedAt'] == null) ...[
-            TextField(
-              controller: result,
-              style: const TextStyle(color: Color(0xffe1e2eb)),
-              decoration: InputDecoration(
-                labelText: widget.game.resultHint,
-                helperText: 'Chọn một lần trước khi hết hạn cược',
-                border: const OutlineInputBorder(),
+          if (status == 'open' && round['plannedAt'] == null)
+            ValueListenableBuilder<DateTime>(
+              valueListenable: now,
+              builder: (context, time, _) => RoundOutcomePicker(
+                game: widget.game,
+                round: round,
+                enabled:
+                    !busy &&
+                    !offline &&
+                    (_roundDeadline(round)?.isAfter(time) ?? false),
+                onSelected: (choice) => settle(roundId, choice.result),
               ),
             ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed:
-                  busy ||
-                      offline ||
-                      !(_roundDeadline(round)?.isAfter(now.value) ?? false)
-                  ? null
-                  : () => settle(roundId),
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Chọn kết quả cho phiên'),
-            ),
-          ],
           if (round['plannedAt'] != null)
             const Text(
               'Kết quả đã chọn, không thể sửa; server chốt sau hạn cược.',
