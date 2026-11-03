@@ -26,6 +26,8 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
       await setDoc(doc(c.firestore(), 'rounds/settled-test'), {game: 'tai_xiu', status: 'settled', settledAt: new Date(), result: [6, 6, 6], outcome: {side: 'tai', total: 18}});
       await setDoc(doc(c.firestore(), 'rounds/rule-test/bets/alice'), {amount: 10});
       await setDoc(doc(c.firestore(), 'auditLogs/test'), {action: 'TEST'});
+      await setDoc(doc(c.firestore(), 'roundPlans/rule-test'), {result: [1, 2, 3]});
+      await setDoc(doc(c.firestore(), 'rooms/tai_xiu/members/alice'), {lastSeen: new Date()});
       await setDoc(doc(c.firestore(), 'cardTables/card-test'), {game: 'poker', status: 'playing'});
       await setDoc(doc(c.firestore(), 'cardTables/card-test/hands/alice'), {cards: ['AS', 'AH']});
       await setDoc(doc(c.firestore(), 'cardSecrets/card-test'), {state: {hands: {alice: ['AS', 'AH']}}});
@@ -50,13 +52,19 @@ test('rules: không ghi client, ví/bài riêng, audit chỉ admin', async () =>
     await assertFails(getDoc(doc(alice, 'auditLogs/test')));
     await assertSucceeds(getDoc(doc(admin, 'auditLogs/test')));
     await assertFails(getDoc(doc(anon, 'auditLogs/test')));
-    const firstAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), orderBy('at', 'desc'), limit(20))));
+    const firstAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), where('at', '>=', new Date(1000)), where('at', '<=', new Date(1024)), orderBy('at', 'desc'), limit(20))));
     assert.equal(firstAuditPage.docs.length, 20);
     assert.equal(firstAuditPage.docs[0].data().details.index, 24);
-    const secondAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), orderBy('at', 'desc'), startAfter(firstAuditPage.docs.at(-1)), limit(20))));
+    const secondAuditPage = await assertSucceeds(getDocs(query(collection(admin, 'auditLogs'), where('at', '>=', new Date(1000)), where('at', '<=', new Date(1024)), orderBy('at', 'desc'), startAfter(firstAuditPage.docs.at(-1)), limit(20))));
     assert.equal(secondAuditPage.docs.length, 5);
     await assertFails(getDocs(query(collection(alice, 'auditLogs'), orderBy('at', 'desc'), limit(20))));
     await assertFails(getDoc(doc(bob, 'rounds/rule-test/bets/alice')));
+    await assertFails(getDoc(doc(alice, 'roundPlans/rule-test')));
+    await assertSucceeds(getDoc(doc(admin, 'roundPlans/rule-test')));
+    await assertSucceeds(getDocs(collection(admin, 'rooms/tai_xiu/members')));
+    await assertFails(getDocs(collection(alice, 'rooms/tai_xiu/members')));
+    await assertFails(setDoc(doc(alice, 'rooms/tai_xiu/members/alice'), {lastSeen: new Date()}));
+    await assertFails(setDoc(doc(admin, 'roundPlans/rule-test'), {result: [6, 6, 6]}));
     await assertSucceeds(getDoc(doc(bob, 'cardTables/card-test')));
     await assertSucceeds(getDoc(doc(alice, 'cardTables/card-test/hands/alice')));
     await assertFails(getDoc(doc(bob, 'cardTables/card-test/hands/alice')));
@@ -88,6 +96,10 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const boss = await client(0); await adminAuth(app).setCustomUserClaims(boss.user.uid, {admin: true}); await boss.user.getIdToken(true); await boss.call('ensureProfile');
     const p = await client(1); await p.call('ensureProfile');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 10000);
+    await p.call('touchGameRoom', {game: 'tai_xiu'});
+    assert.equal((await db.doc(`rooms/tai_xiu/members/${p.user.uid}`).get()).exists, true);
+    await p.call('leaveGameRoom', {game: 'tai_xiu'});
+    assert.equal((await db.doc(`rooms/tai_xiu/members/${p.user.uid}`).get()).exists, false);
     await assert.rejects(p.call('startRound', {game: 'tai_xiu', mode: 'admin'}));
     await assert.rejects(p.call('adjustBalance', {uid: p.user.uid, delta: 100, reason: 'Không có quyền', requestId: 'no-rights-001'}));
     await assert.rejects(p.call('wallet', {kind: 'deposit', amount: 100}));
@@ -102,17 +114,24 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
       await assert.rejects(p.call('placeBet', {roundId, side, amount: 10000, requestId: `first-${game}`}));
       if (game === 'bau_cua') await p.call('placeBet', {roundId, side: 'bau', amount: 1000, requestId: 'second-bau'});
-      await assert.rejects(boss.call('settleRound', {roundId, result, reason: 'Bài kiểm thử'}));
+      const stakeStats = (await db.doc(`rounds/${roundId}`).get()).data();
+      assert.equal(stakeStats.totals[side], 1000);
+      assert.equal(stakeStats.playerCounts[side], 1);
+      assert.ok((await db.doc(`rounds/${roundId}/bets/${p.user.uid}`).get()).data().nickname);
+      await assert.rejects(p.call('setRoundOutcome', {roundId, result, reason: 'Không có quyền'}));
+      await assert.rejects(boss.call('setRoundOutcome', {roundId, result: [9, 9, 9], reason: 'Không hợp lệ'}));
+      await boss.call('setRoundOutcome', {roundId, result, reason: 'Bài kiểm thử'});
+      await assert.rejects(boss.call('setRoundOutcome', {roundId, result, reason: 'Không đổi được'}));
+      const pending = (await db.doc(`rounds/${roundId}`).get()).data();
+      assert.equal(pending.result, undefined);
+      assert.equal(pending.mode, 'admin');
+      assert.deepEqual((await db.doc(`roundPlans/${roundId}`).get()).data().result, result);
       await db.doc(`rounds/${roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-      const firstLock = await p.call('advanceRandomRound', {roundId});
-      assert.equal(firstLock.status, 'locked');
-      const repeatedLock = await p.call('advanceRandomRound', {roundId});
-      assert.equal(repeatedLock.status, 'locked');
-      await assert.rejects(p.call('settleRound', {roundId, result, reason: 'Không có quyền'}));
-      await assert.rejects(boss.call('settleRound', {roundId, result: [9, 9, 9], reason: 'Không hợp lệ'}));
-      await Promise.all([1, 2].map(() => boss.call('settleRound', {roundId, result, reason: 'Bài kiểm thử'})));
+      await assert.rejects(boss.call('setRoundOutcome', {roundId, result, reason: 'Đã muộn'}));
+      await Promise.all([1, 2].map(() => p.call('advanceRandomRound', {roundId})));
       const round = (await db.doc(`rounds/${roundId}`).get()).data();
       assert.equal(round.status, 'settled'); assert.equal(round.reason, undefined);
+      assert.deepEqual(round.result, result);
       assert.equal((await db.doc(`rounds/${roundId}/bets/${p.user.uid}`).get()).data().credit, credit);
       assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${roundId}`).get()).data().delta, credit);
       await assert.rejects(boss.call('cancelRound', {roundId, reason: 'Không hủy đã chốt'}));
@@ -120,22 +139,20 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 14900);
     const {roundId: cancelled} = await boss.call('startRound', {game: 'tai_xiu', mode: 'admin'});
     await p.call('placeBet', {roundId: cancelled, side: 'xiu', amount: 1000, requestId: 'cancel-first'});
-    await db.doc(`rounds/${cancelled}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
-    await p.call('advanceRandomRound', {roundId: cancelled});
     const beforeRefund = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
     await db.doc(`users/${p.user.uid}`).update({balance: Number.MAX_SAFE_INTEGER});
     await assert.rejects(boss.call('cancelRound', {roundId: cancelled, reason: 'Không thể hoàn điểm tràn số'}));
-    assert.equal((await db.doc(`rounds/${cancelled}`).get()).data().status, 'locked');
+    assert.equal((await db.doc(`rounds/${cancelled}`).get()).data().status, 'open');
     assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${cancelled}`).get()).exists, false);
     await db.doc(`users/${p.user.uid}`).update({balance: beforeRefund});
     await Promise.all([1, 2].map(() => boss.call('cancelRound', {roundId: cancelled, reason: 'Hủy phiên thử nghiệm'})));
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 14900);
     assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${cancelled}`).get()).data().kind, 'refund');
-    await assert.rejects(boss.call('settleRound', {roundId: cancelled, result: [2, 3, 6], reason: 'Không chốt đã hủy'}));
+    await assert.rejects(boss.call('setRoundOutcome', {roundId: cancelled, result: [2, 3, 6], reason: 'Không chốt đã hủy'}));
     const random = await boss.call('startRound', {game: 'bau_cua', mode: 'random'});
     await db.doc(`rounds/${random.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     await p.call('advanceRandomRound', {roundId: random.roundId});
-    await boss.call('settleRound', {roundId: random.roundId});
+    await p.call('advanceRandomRound', {roundId: random.roundId});
     assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().result.length, 3);
     const logs = await db.collection('auditLogs').where('action', '==', 'SETTLE').get();
     assert.equal(logs.size, 4);
@@ -146,13 +163,14 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       p.call('placeBet', {roundId: race.roundId, side: 'tai', amount: 1000, requestId: 'race-p'}),
       other.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 1000, requestId: 'race-other'}),
     ]);
+    await boss.call('setRoundOutcome', {roundId: race.roundId, result: [2, 3, 6], reason: 'Chốt cùng thời điểm'});
     await db.doc(`rounds/${race.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     const late = await client(3); await late.call('ensureProfile');
     await assert.rejects(late.call('placeBet', {roundId: race.roundId, side: 'xiu', amount: 1000, requestId: 'race-late'}));
-    await p.call('advanceRandomRound', {roundId: race.roundId});
+    await p.call('lockRound', {roundId: race.roundId});
     const raced = await Promise.allSettled([
       boss.call('cancelRound', {roundId: race.roundId, reason: 'Hủy cùng thời điểm'}),
-      boss.call('settleRound', {roundId: race.roundId, result: [2, 3, 6], reason: 'Chốt cùng thời điểm'}),
+      p.call('advanceRandomRound', {roundId: race.roundId}),
     ]);
     assert.equal(raced.filter(item => item.status === 'fulfilled').length, 1);
     const final = (await db.doc(`rounds/${race.roundId}`).get()).data();

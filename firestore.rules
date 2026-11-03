@@ -8,11 +8,15 @@ service cloud.firestore {
    allow read: if signedIn() && (request.auth.uid == uid || admin());
    match /operations/{id} { allow read: if signedIn() && (request.auth.uid == uid || admin()); }
   }
-  match /rooms/{id} { allow read: if active(); }
+  match /rooms/{id} {
+   allow read: if active();
+   match /members/{uid} { allow read: if admin(); }
+  }
   match /rounds/{id} {
    allow read: if active();
    match /bets/{uid} { allow read: if active() && (request.auth.uid == uid || admin()); }
   }
+  match /roundPlans/{id} { allow read: if admin(); }
   match /cardTables/{id} {
    allow read: if active();
    match /hands/{uid} { allow read: if active() && request.auth.uid == uid; }

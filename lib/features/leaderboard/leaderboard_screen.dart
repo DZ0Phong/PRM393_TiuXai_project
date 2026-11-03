@@ -12,7 +12,6 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   static const _background = Color(0xff111318);
-  static const _surface = Color(0xff1d2026);
   static const _gold = Color(0xffffc174);
   late Future<List<_LeaderboardEntry>> _ranking;
 
@@ -304,7 +303,7 @@ class _MessageState extends StatelessWidget {
         Icon(icon, color: const Color(0xffa08e7a), size: 46),
         const SizedBox(height: 12),
         Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xffe1e2eb))),
-        if (action != null) action!,
+        ?action,
       ]),
     ),
   );

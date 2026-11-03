@@ -31,9 +31,6 @@ const allowedGame = (value) => {
 const automaticGames = ['tai_xiu', 'bau_cua', 'xoc_xoc'];
 const ROUND_SECONDS = 30;
 const RESULT_REVEAL_SECONDS = 6;
-// Keep locked random rounds available long enough for an administrator to
-// take over and enter a result. Untouched rounds still settle automatically.
-const ADMIN_INTERVENTION_SECONDS = 60;
 
 function emptyBetStats(game) {
   const sides = games.games[game].sides;
@@ -93,6 +90,24 @@ exports.ensureGameRounds = call(async (req) => {
     rooms[game] = await ensureAutomaticRound(game, req.auth.uid);
   }
   return rooms;
+});
+
+// Approximate room presence: clients heartbeat while the game screen is open.
+// Admin filters stale members; no point or bet authority is derived from this.
+exports.touchGameRoom = call(async (req) => {
+  const game = allowedGame(req.data?.game);
+  const profile = await db.doc(`users/${req.auth.uid}`).get();
+  active(profile);
+  await db.doc(`rooms/${game}/members/${req.auth.uid}`).set({
+    nickname: profile.data().nickname || `Bạn ${req.auth.uid.slice(0, 6)}`,
+    lastSeen: now(),
+  });
+  return {ok: true};
+});
+exports.leaveGameRoom = call(async (req) => {
+  const game = allowedGame(req.data?.game);
+  await db.doc(`rooms/${game}/members/${req.auth.uid}`).delete();
+  return {ok: true};
 });
 
 // Public ranking exposes only a pseudonym and simulated balance, never email or private profile.
@@ -272,6 +287,7 @@ exports.placeBet = call(async (req) => {
     if (!(old?.stakes?.[side] > 0)) stats.playerCounts[side] = (stats.playerCounts[side] || 0) + 1;
     const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? side : null, amount: total,
       stakes: {...(old?.stakes || {}), [side]: (old?.stakes?.[side] || 0) + amount},
+      nickname: u.data().nickname || `Bạn ${req.auth.uid.slice(0, 6)}`,
       at: old?.at || now(), lastAt: now()};
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);
@@ -342,28 +358,30 @@ exports.lockRound = call(async (req) => {
   return lock(id(req.data?.roundId), 'scheduler');
 });
 
-exports.interveneRound = call(async (req) => {
+// A private plan is committed while betting is open. The public round only
+// advertises admin mode; the actual dice/coins stay unreadable to players.
+exports.setRoundOutcome = call(async (req) => {
   admin(req);
-  const roundId = id(req.data?.roundId), why = reason(req.data?.reason), ref = db.doc(`rounds/${roundId}`);
+  const roundId = id(req.data?.roundId), why = reason(req.data?.reason);
+  const ref = db.doc(`rounds/${roundId}`), plan = db.doc(`roundPlans/${roundId}`);
   return db.runTransaction(async (tx) => {
-    const round = await tx.get(ref);
+    const [round, existing] = await Promise.all([tx.get(ref), tx.get(plan)]);
     if (!round.exists) fail('Không có phiên');
     const data = round.data();
-    if (!automaticGames.includes(data.game)) fail('Trò chơi này không dùng phiên cược tự động');
-    if (data.status !== 'locked') fail('Chỉ có thể can thiệp sau khi khóa cược');
-    if (data.mode === 'admin') return {roundId, mode: 'admin', alreadyIntervened: true};
-    tx.update(ref, {
-      mode: 'admin',
-      intervenedAt: now(),
-      intervenedBy: req.auth.uid,
-      interventionReason: why,
-    });
-    audit(tx, req.auth.uid, 'INTERVENE_ROUND', {game: data.game, roundId, reason: why});
+    if (!automaticGames.includes(data.game)) fail('Trò chơi không hợp lệ');
+    if (data.status !== 'open' || data.closesAt.toMillis() <= Date.now()) fail('Đã hết hạn chọn kết quả');
+    if (existing.exists) throw new HttpsError('already-exists', 'Kết quả đã chọn; không thể sửa');
+    if (!games.validateOutcome(data.game, req.data?.result))
+      throw new HttpsError('invalid-argument', 'Kết quả không hợp lệ');
+    const at = now();
+    tx.create(plan, {game: data.game, result: req.data.result, reason: why, actor: req.auth.uid, at});
+    tx.update(ref, {mode: 'admin', plannedAt: at});
+    audit(tx, req.auth.uid, 'PLAN_OUTCOME', {game: data.game, roundId, result: req.data.result, reason: why});
     return {roundId, mode: 'admin'};
   });
 });
 
-async function settle(roundId, actor, suppliedResult, suppliedReason) {
+async function settle(roundId, actor) {
   const ref = db.doc(`rounds/${roundId}`);
   return db.runTransaction(async (tx) => {
     const r = await tx.get(ref);
@@ -371,10 +389,13 @@ async function settle(roundId, actor, suppliedResult, suppliedReason) {
     const data = r.data();
     if (data.status === 'settled') return {ok: true, alreadySettled: true};
     if (data.status !== 'locked') fail('Phiên chưa khóa hoặc đã hủy');
-    if (data.mode === 'admin' && actor === 'scheduler') return {waiting: true};
-    const result = data.mode === 'admin' ? suppliedResult : games.randomOutcome(data.game);
-    if (!games.validateOutcome(data.game, result)) throw new HttpsError('invalid-argument', 'Kết quả không hợp lệ');
-    const auditReason = data.mode === 'admin' ? reason(suppliedReason) : 'Server CSPRNG';
+    const plan = await tx.get(db.doc(`roundPlans/${roundId}`));
+    const chosen = plan.exists ? plan.data() : null;
+    if (chosen && (chosen.game !== data.game || !games.validateOutcome(data.game, chosen.result)))
+      fail('Kế hoạch kết quả không hợp lệ');
+    const result = chosen ? chosen.result : games.randomOutcome(data.game);
+    const mode = chosen ? 'admin' : 'random';
+    const auditReason = chosen ? chosen.reason : 'Server CSPRNG';
     const bets = await tx.get(ref.collection('bets'));
     const users = await Promise.all(bets.docs.map((b) => tx.get(db.doc(`users/${b.id}`))));
     const credits = games.creditsForRound(data.game, bets.docs.map((b) => ({
@@ -388,19 +409,13 @@ async function settle(roundId, actor, suppliedResult, suppliedReason) {
       tx.update(b.ref, {credit, refund, settledAt: now()});
       tx.create(users[i].ref.collection('operations').doc(`result_${roundId}`), {kind: 'payout', game: data.game, roundId, delta: credit, refund, balance, at: now()});
     });
-    tx.update(ref, {status: 'settled', result, outcome: games.describeOutcome(data.game, result), settledAt: now()});
-    audit(tx, actor, 'SETTLE', {game: data.game, roundId, mode: data.mode, result, reason: auditReason, credits});
+    tx.update(ref, {status: 'settled', mode, result, outcome: games.describeOutcome(data.game, result), settledAt: now()});
+    audit(tx, actor, 'SETTLE', {game: data.game, roundId, mode, result, reason: auditReason, plannedBy: chosen?.actor || null, credits});
     return {ok: true};
   });
 }
-exports.settleRound = call(async (req) => {
-  admin(req);
-  const roundId = id(req.data?.roundId);
-  return settle(roundId, req.auth.uid, req.data?.result, req.data?.reason);
-});
-// A player may advance the deadline transition after betting expires. Manual
-// rounds stay locked for the administrator; random rounds settle after the
-// intervention window. This is also used where scheduled functions do not run.
+// No post-close admin action can change the result. Any client may advance a
+// due round; the scheduled tick is a fallback when no client is online.
 exports.advanceRandomRound = call(async (req) => {
   const roundId = id(req.data?.roundId), ref = db.doc(`rounds/${roundId}`);
   const snap = await ref.get();
@@ -412,15 +427,8 @@ exports.advanceRandomRound = call(async (req) => {
       return {status: 'open', notDue: true};
     await lock(roundId, 'scheduler');
   }
-  const locked = await ref.get();
-  if (locked.data()?.mode === 'admin' && locked.data()?.status === 'locked')
-    return {status: 'locked', waiting: true, adminControlled: true};
-  const lockedAt = locked.data()?.lockedAt?.toMillis?.();
-  if (locked.data()?.status === 'locked' && lockedAt &&
-      Date.now() < lockedAt + ADMIN_INTERVENTION_SECONDS * 1000) {
-    return {status: 'locked', waiting: true};
-  }
-  return settle(roundId, 'scheduler');
+  await settle(roundId, 'scheduler');
+  return {status: 'settled'};
 });
 exports.cancelRound = call(async (req) => {
   admin(req);
@@ -486,9 +494,7 @@ exports.tick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1
   for (const r of due.docs) await lock(r.id, 'scheduler');
   const random = await db.collection('rounds').where('status', '==', 'locked').get();
   for (const r of random.docs) {
-    const lockedAt = r.data().lockedAt?.toMillis?.() ?? 0;
-    if (r.data().mode === 'random' && Date.now() >= lockedAt + ADMIN_INTERVENTION_SECONDS * 1000)
-      await settle(r.id, 'scheduler');
+    await settle(r.id, 'scheduler');
   }
   for (const game of automaticGames) await ensureAutomaticRound(game, 'scheduler');
 });

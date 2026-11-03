@@ -187,23 +187,55 @@ class _RoundScreenState extends State<RoundScreen> {
   final Set<String> _advancingRounds = {};
   final Set<String> _advancedRounds = {};
   final Map<String, DateTime> _lastAdvanceAttempt = {};
+  bool _touchingRoom = false;
+  DateTime? _lastRoomTouch;
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => now.value = DateTime.now(),
-    );
+    _touchRoom();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      now.value = DateTime.now();
+      if (_lastRoomTouch == null ||
+          now.value.difference(_lastRoomTouch!).inSeconds >= 10) {
+        _touchRoom();
+      }
+    });
   }
 
   @override
   void dispose() {
     timer?.cancel();
+    unawaited(_leaveRoom());
     now.dispose();
     amount.dispose();
     result.dispose();
     reason.dispose();
     super.dispose();
+  }
+
+  Future<void> _leaveRoom() async {
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('leaveGameRoom').call({'game': widget.game.id});
+    } catch (_) {
+      /* Presence expires after 30 seconds. */
+    }
+  }
+
+  Future<void> _touchRoom() async {
+    if (_touchingRoom) return;
+    _touchingRoom = true;
+    _lastRoomTouch = DateTime.now();
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('touchGameRoom').call({'game': widget.game.id});
+    } catch (_) {
+      // Presence is best effort; it must not block betting.
+    } finally {
+      _touchingRoom = false;
+    }
   }
 
   Future<void> call(
@@ -218,7 +250,7 @@ class _RoundScreenState extends State<RoundScreen> {
     });
     try {
       await functions.httpsCallable(name).call(data);
-      if (name == 'settleRound' || name == 'cancelRound') {
+      if (name == 'cancelRound') {
         unawaited(_ensureNextSessions());
       }
       if (mounted) setState(() => message = 'Thao tác đã hoàn tất.');
@@ -231,7 +263,7 @@ class _RoundScreenState extends State<RoundScreen> {
   }
 
   Future<void> _ensureNextSessions() async {
-    await Future<void>.delayed(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(seconds: 7));
     if (!mounted) return;
     try {
       await functions.httpsCallable('ensureGameRounds').call();
@@ -278,19 +310,11 @@ class _RoundScreenState extends State<RoundScreen> {
       setState(() => message = 'Nhập lý do từ 5 đến 300 ký tự.');
       return;
     }
-    call('settleRound', {
+    call('setRoundOutcome', {
       'roundId': id,
       'result': parsed,
       'reason': reason.text.trim(),
     });
-  }
-
-  void intervene(String id) {
-    if (reason.text.trim().length < 5 || reason.text.length > 300) {
-      setState(() => message = 'Nhập lý do can thiệp từ 5 đến 300 ký tự.');
-      return;
-    }
-    call('interveneRound', {'roundId': id, 'reason': reason.text.trim()});
   }
 
   DateTime? _roundDeadline(Map<String, dynamic> round) {
@@ -340,8 +364,8 @@ class _RoundScreenState extends State<RoundScreen> {
           const SizedBox(height: 7),
           Text(
             adminMode
-                ? 'Backend tự khóa cược khi hết giờ. Sau đó admin nhập và chốt kết quả.'
-                : 'Backend tự khóa cược khi hết giờ. Admin có thể tiếp quản phiên đã khóa để nhập kết quả.',
+                ? 'Chọn kết quả một lần trước khi hết giờ cược; backend tự chốt khi hết hạn.'
+                : 'Có thể chọn kết quả một lần trước khi hết giờ cược; nếu không, server sinh ngẫu nhiên.',
             style: const TextStyle(
               color: Color(0xffd8c3ad),
               fontSize: 12,
@@ -431,39 +455,32 @@ class _RoundScreenState extends State<RoundScreen> {
               ),
             ),
           ],
-          if (!adminMode && status == 'locked')
-            FilledButton.icon(
-              onPressed: busy || offline ? null : () => intervene(roundId),
-              icon: const Icon(Icons.tune),
-              label: Text(
-                status == 'locked'
-                    ? 'Tiếp quản để nhập kết quả'
-                    : 'Tiếp quản phiên này',
-              ),
-            ),
-          if (adminMode && status == 'locked') ...[
-            const SizedBox(height: 4),
+          if (status == 'open' && round['plannedAt'] == null) ...[
             TextField(
               controller: result,
               style: const TextStyle(color: Color(0xffe1e2eb)),
               decoration: InputDecoration(
                 labelText: widget.game.resultHint,
-                helperText:
-                    'Nhập kết quả theo thứ tự; ví dụ: ${widget.game.id == 'bau_cua'
-                        ? 'nai,bau,ga'
-                        : widget.game.id == 'xoc_xoc'
-                        ? '0,1,0,1'
-                        : '2,3,6'}',
+                helperText: 'Chọn một lần trước khi hết hạn cược',
                 border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
-              onPressed: busy || offline ? null : () => settle(roundId),
+              onPressed:
+                  busy ||
+                      offline ||
+                      !(_roundDeadline(round)?.isAfter(now.value) ?? false)
+                  ? null
+                  : () => settle(roundId),
               icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Chốt kết quả phiên'),
+              label: const Text('Chọn kết quả cho phiên'),
             ),
           ],
+          if (round['plannedAt'] != null)
+            const Text(
+              'Kết quả đã chọn, không thể sửa; server chốt sau hạn cược.',
+            ),
           if (status == 'open' || status == 'locked')
             TextButton.icon(
               onPressed: busy || offline
@@ -485,7 +502,11 @@ class _RoundScreenState extends State<RoundScreen> {
               label: const Text('Hủy phiên và hoàn cược'),
             ),
           if (status == 'open' || status == 'locked')
-            RoundBets(roundId: roundId),
+            ValueListenableBuilder<DateTime>(
+              valueListenable: now,
+              builder: (context, time, _) =>
+                  RoundBets(roundId: roundId, game: widget.game, now: time),
+            ),
         ],
       ),
     ),
@@ -764,8 +785,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                               1000)
                                           .ceil();
                                 final playerCanAdvance =
-                                    status == 'open' ||
-                                    (!adminMode && status == 'locked');
+                                    status == 'open' || status == 'locked';
                                 if (!widget.isAdmin &&
                                     playerCanAdvance &&
                                     deadline != null &&

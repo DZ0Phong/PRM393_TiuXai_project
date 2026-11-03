@@ -28,7 +28,11 @@ String normalizeAuditSearch(String value) {
 }
 
 String auditCategoryForAction(String action) {
-  if (action == 'INTERVENE_ROUND' || action == 'SETTLE') return 'round_result';
+  if (action == 'PLAN_OUTCOME' ||
+      action == 'INTERVENE_ROUND' ||
+      action == 'SETTLE') {
+    return 'round_result';
+  }
   if (action == 'ADJUST_BALANCE') return 'balance';
   if (action == 'CANCEL' ||
       action == 'TABLE_CANCEL' ||

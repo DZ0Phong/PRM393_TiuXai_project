@@ -5,6 +5,7 @@ void main() {
   group('audit event categories', () {
     test('maps every backend action to a visible filter', () {
       const actions = <String, String>{
+        'PLAN_OUTCOME': 'round_result',
         'INTERVENE_ROUND': 'round_result',
         'SETTLE': 'round_result',
         'ADJUST_BALANCE': 'balance',

@@ -186,7 +186,6 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
 
   Widget _sessionContent(String roundId, Map<String, dynamic> round) {
     final status = round['status']?.toString() ?? 'unknown';
-    final adminMode = round['mode'] == 'admin';
     final deadline = _deadlineFor(round);
     final active = status == 'open' || status == 'locked';
 
@@ -253,9 +252,16 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
         ),
         if (active) ...[
           const SizedBox(height: 8),
-          _resultConsole(roundId, status, adminMode),
+          _resultConsole(roundId, status, deadline),
         ],
-        if (active) ...[const SizedBox(height: 8), RoundBets(roundId: roundId)],
+        if (active) ...[
+          const SizedBox(height: 8),
+          ValueListenableBuilder<DateTime>(
+            valueListenable: _now,
+            builder: (context, time, _) =>
+                RoundBets(roundId: roundId, game: widget.game, now: time),
+          ),
+        ],
         const SizedBox(height: 8),
         _newSessionCard(status),
         if (status == 'settled' && round['result'] is List)
@@ -321,115 +327,80 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
         ),
       );
 
-  Widget _resultConsole(String roundId, String status, bool adminMode) {
-    final locked = status == 'locked';
-    return _surfaceCard(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.tune, color: _gold, size: 16),
-              const SizedBox(width: 6),
-              const Expanded(
-                child: Text(
-                  'NHẬP KẾT QUẢ PHIÊN • ADMIN',
-                  style: TextStyle(
-                    color: _gold,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                locked ? 'ĐÃ KHÓA' : 'CHỜ KHÓA',
-                style: TextStyle(
-                  color: locked ? _green : _muted,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          if (locked && !adminMode) ...[
+  Widget _resultConsole(
+    String roundId,
+    String status,
+    Timestamp? deadline,
+  ) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    stream: FirebaseFirestore.instance.doc('roundPlans/$roundId').snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return _error('Không tải được kết quả đã chọn: ${snapshot.error}');
+      }
+      if (!snapshot.hasData) return const LinearProgressIndicator(color: _gold);
+      final planned = snapshot.data!.data();
+      return _surfaceCard(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             const Text(
-              'Phiên đang chờ máy chủ chốt. Tiếp quản để nhập kết quả thủ công.',
-              style: TextStyle(color: _muted, fontSize: 9),
+              'CHỌN KẾT QUẢ • ADMIN',
+              style: TextStyle(
+                color: _gold,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 7),
-            _reasonInput(),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 34,
-              child: FilledButton.icon(
-                onPressed: _busyAction != null || !_validReason
-                    ? null
-                    : () => _call('interveneRound', {
-                        'roundId': roundId,
-                        'reason': _reason.text.trim(),
-                      }, success: 'Đã tiếp quản phiên. Nhập kết quả để chốt.'),
-                icon: const Icon(Icons.admin_panel_settings, size: 15),
-                label: const Text(
-                  'Tiếp quản kết quả',
-                  style: TextStyle(fontSize: 10),
+            if (planned != null) ...[
+              Text(
+                'Đã chọn: ${(planned['result'] as List?)?.join(' • ') ?? '—'}',
+                style: const TextStyle(color: _green, fontSize: 11),
+              ),
+              const Text(
+                'Đã ghi nhận một lần; server tự chốt sau khi cược hết giờ. Không thể đổi.',
+                style: TextStyle(color: _muted, fontSize: 9),
+              ),
+            ] else if (status == 'open') ...[
+              const Text(
+                'Chọn một lần trước hạn cược. Kết quả không lộ cho người chơi trước khi chốt.',
+                style: TextStyle(color: _muted, fontSize: 9),
+              ),
+              const SizedBox(height: 7),
+              _resultSelectors(),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _preview(),
+                  style: const TextStyle(color: _gold, fontSize: 9),
                 ),
               ),
-            ),
-          ] else if (adminMode && (locked || status == 'open')) ...[
-            _resultSelectors(),
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                _preview(),
-                style: const TextStyle(
-                  color: _gold,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
+              _reasonInput(),
+              ValueListenableBuilder<DateTime>(
+                valueListenable: _now,
+                builder: (context, time, _) => FilledButton.icon(
+                  onPressed:
+                      _busyAction != null ||
+                          !_validReason ||
+                          deadline == null ||
+                          !deadline.toDate().isAfter(time)
+                      ? null
+                      : () => _plan(roundId),
+                  icon: const Icon(Icons.verified_outlined, size: 16),
+                  label: const Text('Chọn kết quả cho phiên này'),
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            _reasonInput(),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 36,
-              child: FilledButton.icon(
-                onPressed: _busyAction != null || !_validReason || !locked
-                    ? null
-                    : () => _settle(roundId),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xff976414),
-                  foregroundColor: const Color(0xffffe4ad),
-                ),
-                icon: const Icon(Icons.verified_outlined, size: 16),
-                label: Text(
-                  locked
-                      ? 'Chốt kết quả & trả thưởng'
-                      : 'Chốt sau khi khóa cược',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            ] else
+              const Text(
+                'Đã hết hạn chọn kết quả; backend tự chốt ngẫu nhiên nếu chưa có lựa chọn.',
+                style: TextStyle(color: _muted, fontSize: 9),
               ),
-            ),
-          ] else ...[
-            Text(
-              adminMode
-                  ? 'Chế độ ADMIN đã chọn. Nhập kết quả sau khi khóa cược.'
-                  : 'Kết quả được máy chủ sinh ngẫu nhiên sau khi khóa cược.',
-              style: const TextStyle(color: _muted, fontSize: 9),
-            ),
-            const SizedBox(height: 6),
-            _reasonInput(),
           ],
-        ],
-      ),
-    );
-  }
+        ),
+      );
+    },
+  );
 
   bool get _validReason =>
       _reason.text.trim().length >= 5 && _reason.text.trim().length <= 300;
@@ -587,15 +558,15 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
     );
   }
 
-  Future<void> _settle(String roundId) async {
+  Future<void> _plan(String roundId) async {
     final result = widget.game.id == 'bau_cua'
         ? _result.cast<String>()
         : _result.cast<int>();
-    await _call('settleRound', {
+    await _call('setRoundOutcome', {
       'roundId': roundId,
       'result': result,
       'reason': _reason.text.trim(),
-    }, success: 'Đã chốt kết quả và trả thưởng.');
+    }, success: 'Đã lưu kết quả; chờ hết hạn cược để chốt.');
   }
 
   Future<void> _confirmCancel(String roundId) async {
@@ -681,7 +652,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
                 child: _modeOption(
                   'admin',
                   'ADMIN',
-                  'Nhập tay sau khóa',
+                  'Chọn trước hạn',
                   Icons.verified_user_outlined,
                 ),
               ),
