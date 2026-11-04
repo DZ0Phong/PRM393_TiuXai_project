@@ -81,7 +81,8 @@ class _AuthenticatedEntryScreenState extends State<AuthenticatedEntryScreen> {
       if (snapshot.hasError) {
         final error = snapshot.error;
         final authCode = error is FirebaseAuthException ? error.code : null;
-        final sessionExpired = authCode == 'user-not-found' ||
+        final sessionExpired =
+            authCode == 'user-not-found' ||
             authCode == 'user-token-expired' ||
             authCode == 'invalid-user-token';
         return Scaffold(
@@ -101,7 +102,9 @@ class _AuthenticatedEntryScreenState extends State<AuthenticatedEntryScreen> {
                     sessionExpired
                         ? 'Phiên đăng nhập Emulator đã hết hiệu lực. Hãy đăng nhập lại.'
                         : authCode == null
-                        ? 'Kiểm tra Auth Emulator đang chạy, rồi thử lại.'
+                        ? 'Kiểm tra kết nối Firebase, rồi thử lại.'
+                        : authCode == 'unknown'
+                        ? 'Không xác minh được phiên đăng nhập. Nếu vừa đặt lại Firebase Emulator, hãy đăng nhập lại.'
                         : 'Firebase Auth báo lỗi: $authCode',
                     textAlign: TextAlign.center,
                     style: const TextStyle(

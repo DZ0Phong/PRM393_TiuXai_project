@@ -1,7 +1,26 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
-// Use real Firebase Auth/Firestore, but call the group's private HTTPS backend.
+// Optional private HTTPS backend; otherwise call deployed Firebase Functions.
 const backendUrl = String.fromEnvironment('BACKEND_URL');
+
+String? backendConfigurationError(bool emulator, String url) {
+  if (emulator) {
+    return url.isEmpty ? null : 'BACKEND_URL chỉ dùng với Firebase thật.';
+  }
+  if (url.isEmpty) return null; // Live Firebase Functions, no private host.
+  final endpoint = Uri.tryParse(url);
+  if (endpoint == null ||
+      endpoint.scheme != 'https' ||
+      !endpoint.host.endsWith('.ts.net') ||
+      endpoint.userInfo.isNotEmpty ||
+      endpoint.hasPort ||
+      endpoint.hasQuery ||
+      endpoint.hasFragment ||
+      endpoint.path.isNotEmpty) {
+    return 'BACKEND_URL phải là HTTPS gốc của máy nhóm trên Tailscale.';
+  }
+  return null;
+}
 
 extension GameCallable on FirebaseFunctions {
   HttpsCallable gameCallable(String name, {HttpsCallableOptions? options}) {

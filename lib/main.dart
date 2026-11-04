@@ -82,20 +82,8 @@ Future<void> main() async {
         ),
       ),
     );
-    if (backendUrl.isNotEmpty && emulator) {
-      throw StateError('BACKEND_URL chỉ dùng với Firebase thật.');
-    }
-    final endpoint = Uri.tryParse(backendUrl);
-    if (!emulator &&
-        (endpoint == null ||
-            endpoint.scheme != 'https' ||
-            !endpoint.host.endsWith('.ts.net') ||
-            endpoint.userInfo.isNotEmpty ||
-            endpoint.hasQuery ||
-            endpoint.hasFragment ||
-            endpoint.path.isNotEmpty)) {
-      throw StateError('Bản online cần BACKEND_URL là HTTPS gốc của máy nhóm.');
-    }
+    final backendError = backendConfigurationError(emulator, backendUrl);
+    if (backendError != null) throw StateError(backendError);
     if (emulator) {
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
@@ -204,6 +192,25 @@ class _RoundScreenState extends State<RoundScreen> {
     text: 'Điều hành phiên mô phỏng trong lớp',
   );
   final now = ValueNotifier(DateTime.now());
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _roomStream =
+      FirebaseFirestore.instance
+          .doc('rooms/${widget.game.id}')
+          .snapshots(includeMetadataChanges: true);
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream =
+      FirebaseFirestore.instance.doc('users/${widget.uid}').snapshots();
+  String? _observedRoundId;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _betStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _planStream;
+
+  void _observeRound(String id) {
+    if (_observedRoundId == id) return;
+    _observedRoundId = id;
+    _betStream = FirebaseFirestore.instance
+        .doc('rounds/$id/bets/${widget.uid}')
+        .snapshots();
+    _planStream = FirebaseFirestore.instance.doc('roundPlans/$id').snapshots();
+  }
+
   Timer? timer;
   int gameNavIndex = 1;
   bool busy = false;
@@ -469,9 +476,7 @@ class _RoundScreenState extends State<RoundScreen> {
             ),
           ],
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .doc('roundPlans/$roundId')
-                .snapshots(),
+            stream: _planStream,
             builder: (context, plan) {
               if (plan.hasError) {
                 return Text('Không tải được lựa chọn: ${plan.error}');
@@ -709,15 +714,14 @@ class _RoundScreenState extends State<RoundScreen> {
                 ),
               ),
             StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .doc('rooms/${widget.game.id}')
-                  .snapshots(includeMetadataChanges: true),
+              stream: _roomStream,
               builder: (context, room) {
                 if (room.hasError) {
                   return Text('Không tải được phòng: ${room.error}');
                 }
                 if (!room.hasData) return const LinearProgressIndicator();
                 final id = room.data!.data()?['roundId'] as String?;
+                if (id != null) _observeRound(id);
                 if (id == null) {
                   return Card(
                     color:
@@ -842,9 +846,7 @@ class _RoundScreenState extends State<RoundScreen> {
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
-                                stream: FirebaseFirestore.instance
-                                    .doc('users/${widget.uid}')
-                                    .snapshots(),
+                                stream: _userStream,
                                 builder: (context, userSnapshot) =>
                                     ValueListenableBuilder<DateTime>(
                                       valueListenable: now,
@@ -862,11 +864,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                         return StreamBuilder<
                                           DocumentSnapshot<Map<String, dynamic>>
                                         >(
-                                          stream: FirebaseFirestore.instance
-                                              .doc(
-                                                'rounds/$id/bets/${widget.uid}',
-                                              )
-                                              .snapshots(),
+                                          stream: _betStream,
                                           builder: (context, currentBet) {
                                             final data = currentBet.data
                                                 ?.data();
@@ -949,9 +947,7 @@ class _RoundScreenState extends State<RoundScreen> {
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
-                                stream: FirebaseFirestore.instance
-                                    .doc('users/${widget.uid}')
-                                    .snapshots(),
+                                stream: _userStream,
                                 builder: (context, userSnapshot) =>
                                     ValueListenableBuilder<DateTime>(
                                       valueListenable: now,
@@ -969,11 +965,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                         return StreamBuilder<
                                           DocumentSnapshot<Map<String, dynamic>>
                                         >(
-                                          stream: FirebaseFirestore.instance
-                                              .doc(
-                                                'rounds/$id/bets/${widget.uid}',
-                                              )
-                                              .snapshots(),
+                                          stream: _betStream,
                                           builder: (context, currentBet) {
                                             final betData = currentBet.data
                                                 ?.data();
@@ -1049,9 +1041,7 @@ class _RoundScreenState extends State<RoundScreen> {
                               StreamBuilder<
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
-                                stream: FirebaseFirestore.instance
-                                    .doc('users/${widget.uid}')
-                                    .snapshots(),
+                                stream: _userStream,
                                 builder: (context, userSnapshot) =>
                                     ValueListenableBuilder<DateTime>(
                                       valueListenable: now,
@@ -1071,11 +1061,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                         return StreamBuilder<
                                           DocumentSnapshot<Map<String, dynamic>>
                                         >(
-                                          stream: FirebaseFirestore.instance
-                                              .doc(
-                                                'rounds/$id/bets/${widget.uid}',
-                                              )
-                                              .snapshots(),
+                                          stream: _betStream,
                                           builder: (context, currentBet) {
                                             final betData = currentBet.data
                                                 ?.data();
@@ -1205,9 +1191,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                 DocumentSnapshot<Map<String, dynamic>>
                               >(
                                 key: ValueKey('bet_$id'),
-                                stream: FirebaseFirestore.instance
-                                    .doc('rounds/$id/bets/${widget.uid}')
-                                    .snapshots(),
+                                stream: _betStream,
                                 builder: (context, bet) {
                                   if (bet.hasError) {
                                     return Text(

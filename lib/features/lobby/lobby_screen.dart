@@ -36,10 +36,8 @@ class _LobbyState extends State<LobbyScreen> {
   int selectedNav = 0;
   bool showWinToast = true;
   Timer? toastTimer;
-  int jackpot = 3482910450;
+  final jackpot = ValueNotifier<int>(3482910450);
   Timer? jackpotTimer;
-  Timer? roundTimer;
-  bool ensuringRounds = false;
 
   @override
   void initState() {
@@ -48,34 +46,16 @@ class _LobbyState extends State<LobbyScreen> {
       if (mounted) setState(() => showWinToast = false);
     });
     jackpotTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
-      if (mounted) {
-        setState(() => jackpot += 120 + DateTime.now().millisecond % 850);
-      }
+      jackpot.value += 120 + DateTime.now().millisecond % 850;
     });
-    roundTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _ensureAutomaticRounds(),
-    );
   }
 
   @override
   void dispose() {
     toastTimer?.cancel();
     jackpotTimer?.cancel();
-    roundTimer?.cancel();
+    jackpot.dispose();
     super.dispose();
-  }
-
-  Future<void> _ensureAutomaticRounds() async {
-    if (ensuringRounds) return;
-    ensuringRounds = true;
-    try {
-      await widget.functions.gameCallable('ensureGameRounds').call();
-    } catch (_) {
-      // A later timer tick retries if the function or connection is unavailable.
-    } finally {
-      ensuringRounds = false;
-    }
   }
 
   Future<bool> _loadProfile() async {
@@ -278,15 +258,18 @@ class _LobbyState extends State<LobbyScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        jackpot.toString().replaceAllMapped(
-                          RegExp(r'(?=(\d{3})+(?!\d))'),
-                          (_) => '.',
-                        ),
-                        style: const TextStyle(
-                          color: Color(0xffffc174),
-                          fontSize: 25,
-                          fontWeight: FontWeight.w700,
+                      ValueListenableBuilder<int>(
+                        valueListenable: jackpot,
+                        builder: (context, value, _) => Text(
+                          value.toString().replaceAllMapped(
+                            RegExp(r'(?=(\d{3})+(?!\d))'),
+                            (_) => '.',
+                          ),
+                          style: const TextStyle(
+                            color: Color(0xffffc174),
+                            fontSize: 25,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       const Text(

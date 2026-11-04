@@ -13,7 +13,7 @@
 
 ## Chơi chung online nhóm nhỏ trên Spark (mới)
 
-Đã có backend tự host dùng **Firebase Auth/Firestore thật + Tailscale Serve**, không cần Cloud Functions/Blaze. Đọc [hướng dẫn chi tiết](docs/ONLINE_GROUP.md). Bắt buộc host có service-account credential riêng, Tailscale đã đăng nhập, Firestore indexes đã publish và app build với `--dart-define=EMULATORS=false` và `--dart-define=BACKEND_URL=https://ten-may.ten-tailnet.ts.net`. **Chưa live-deploy hoặc test chéo máy:** máy hiện chưa có credential, Tailscale chưa đăng nhập. Bản online không có URL backend sẽ báo lỗi cấu hình thay vì gọi Functions chưa deploy. Máy host tắt thì game không ghi/chốt được. Không đưa credential vào repo.
+Đã có backend tự host dùng **Firebase Auth/Firestore thật + Tailscale Serve**, không cần Cloud Functions/Blaze. Đọc [hướng dẫn chi tiết](docs/ONLINE_GROUP.md). Bắt buộc host có service-account credential riêng, Tailscale đã đăng nhập, Firestore indexes đã publish và app build với `--dart-define=EMULATORS=false` và `--dart-define=BACKEND_URL=https://ten-may.ten-tailnet.ts.net`. **Chưa live-deploy hoặc test chéo máy:** máy hiện chưa có credential, Tailscale chưa đăng nhập. Nếu để trống `BACKEND_URL`, app gọi Cloud Functions trực tiếp; chỉ dùng sau khi đã deploy Functions (cần Blaze). Trên Spark, vẫn cần URL của backend tự host. Máy host tắt thì game không ghi/chốt được. Không đưa credential vào repo.
 
 ## Cho thành viên nhóm clone và chạy trong Android Studio
 
