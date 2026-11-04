@@ -65,7 +65,7 @@ class _RoundBetsState extends State<RoundBets> {
           final members = snapshot.data!.docs.where((doc) {
             final seen = doc.data()['lastSeen'];
             return seen is Timestamp &&
-                widget.now.difference(seen.toDate()).inSeconds < 30;
+                widget.now.difference(seen.toDate()).inSeconds < 150;
           }).toList();
           return Column(
             children: [

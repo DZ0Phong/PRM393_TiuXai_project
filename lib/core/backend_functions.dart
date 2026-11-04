@@ -7,7 +7,7 @@ String? backendConfigurationError(bool emulator, String url) {
   if (emulator) {
     return url.isEmpty ? null : 'BACKEND_URL chỉ dùng với Firebase thật.';
   }
-  if (url.isEmpty) return null; // Live Firebase Functions, no private host.
+  if (url.isEmpty) return 'Bản online cần BACKEND_URL HTTPS; Spark không có Cloud Functions.';
   final endpoint = Uri.tryParse(url);
   if (endpoint == null ||
       endpoint.scheme != 'https' ||

@@ -171,13 +171,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _saving = true);
     try {
       if (emailChanged) {
-        await FirebaseFunctions.instanceFor(
-          region: 'asia-southeast1',
-        ).gameCallable('updateMyEmail').call({'email': newEmail});
-        await FirebaseAuth.instance.currentUser?.reload();
-        _initialEmail = FirebaseAuth.instance.currentUser?.email ?? newEmail;
-        _emailVerified =
-            FirebaseAuth.instance.currentUser?.emailVerified ?? false;
+        await FirebaseAuth.instance.currentUser!.verifyBeforeUpdateEmail(newEmail);
         _email.text = _initialEmail;
       }
       final result =
@@ -199,7 +193,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _message(
         result.data['ok'] == true
             ? emailChanged
-                  ? 'Đã cập nhật email tài khoản ngay lập tức.'
+                  ? 'Đã gửi liên kết xác minh đến email mới; email đăng nhập cũ còn hiệu lực đến khi xác minh.'
                   : 'Đã lưu hồ sơ lên Firebase.'
             : 'Không lưu được hồ sơ.',
       );
@@ -861,7 +855,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       const SizedBox(height: 4),
       const Text(
-        'Email đăng nhập được cập nhật ngay khi lưu; email mới cần xác minh để hiện trạng thái đã xác thực.',
+        'Khi đổi email, xác nhận liên kết gửi đến email mới; đăng nhập lại nếu phiên đã cũ.',
         style: TextStyle(color: _profileMuted, fontSize: 11),
       ),
     ],

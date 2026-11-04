@@ -25,3 +25,20 @@ test('private backend authenticates tokens, rejects unknown/scheduler calls and 
     assert.equal((await fetch(`${url}/health`)).status, 200);
   } finally { server.close(); }
 });
+
+test('per-UID quota rejects repeated expensive reads before invoking handler', async () => {
+  let reads = 0;
+  const server = createApiServer({handlers: {getLeaderboard: {run: async () => { reads++; return []; }}},
+    verifyToken: async (token) => ({uid: token})});
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/api/getLeaderboard`;
+    const call = async (uid) => (await fetch(url, {method: 'POST', headers: {
+      'content-type': 'application/json', authorization: `Bearer ${uid}`,
+    }, body: JSON.stringify({data: {}})})).status;
+    for (let i = 0; i < 6; i++) assert.equal(await call('alice'), 200);
+    assert.equal(await call('alice'), 429);
+    assert.equal(reads, 6);
+    assert.equal(await call('bob'), 200);
+  } finally { server.close(); }
+});

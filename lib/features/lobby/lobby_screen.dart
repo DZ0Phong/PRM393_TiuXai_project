@@ -61,7 +61,6 @@ class _LobbyState extends State<LobbyScreen> {
   Future<bool> _loadProfile() async {
     final token = await widget.user.getIdTokenResult();
     await widget.functions.gameCallable('ensureProfile').call();
-    await widget.functions.gameCallable('ensureGameRounds').call();
     return token.claims?['admin'] == true;
   }
 

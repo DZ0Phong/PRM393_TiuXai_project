@@ -1,6 +1,5 @@
 'use strict';
 const {initializeApp} = require('firebase-admin/app');
-const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, Timestamp, FieldValue} = require('firebase-admin/firestore');
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
@@ -18,6 +17,7 @@ const call = (fn) => onCall({region: 'asia-southeast1', maxInstances: 10}, async
   if (!req.auth) throw new HttpsError('unauthenticated', 'Đăng nhập trước');
   const profile = await db.doc(`users/${req.auth.uid}`).get();
   if (profile.data()?.blocked === true) throw new HttpsError('permission-denied', 'Tài khoản đã bị khóa');
+  req.profile = profile;
   return fn(req);
 });
 const active = (snapshot) => {
@@ -31,6 +31,7 @@ const allowedGame = (value) => {
 const automaticGames = ['tai_xiu', 'bau_cua', 'xoc_xoc'];
 const ROUND_SECONDS = 30;
 const RESULT_REVEAL_SECONDS = 6;
+const PRESENCE_SECONDS = 150;
 
 function emptyBetStats(game) {
   const sides = games.games[game].sides;
@@ -84,24 +85,21 @@ async function ensureAutomaticRound(game, actor) {
 }
 
 exports.ensureGameRounds = call(async (req) => {
-  const rooms = {};
-  for (const game of automaticGames) {
-    rooms[game] = await ensureAutomaticRound(game, req.auth.uid);
-  }
-  return rooms;
+  const game = allowedGame(req.data?.game);
+  return {[game]: await ensureAutomaticRound(game, req.auth.uid)};
 });
 
 // Approximate room presence: clients heartbeat while the game screen is open.
 // Admin filters stale members; no point or bet authority is derived from this.
 exports.touchGameRoom = call(async (req) => {
   const game = allowedGame(req.data?.game);
-  const profile = await db.doc(`users/${req.auth.uid}`).get();
+  const profile = req.profile;
   active(profile);
   await db.doc(`rooms/${game}/members/${req.auth.uid}`).set({
     nickname: profile.data().nickname || `Bạn ${req.auth.uid.slice(0, 6)}`,
     lastSeen: now(),
   });
-  return {ok: true};
+  return ensureAutomaticRound(game, req.auth.uid);
 });
 exports.leaveGameRoom = call(async (req) => {
   const game = allowedGame(req.data?.game);
@@ -138,26 +136,6 @@ exports.ensureProfile = call(async (req) => {
     audit(tx, req.auth.uid, 'WELCOME', {amount: 10000});
   });
   return {ok: true};
-});
-
-// Update the signed-in user's email immediately; the new address remains unverified.
-exports.updateMyEmail = call(async (req) => {
-  const email = typeof req.data?.email === 'string' ? req.data.email.trim() : '';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-    throw new HttpsError('invalid-argument', 'Địa chỉ email không hợp lệ');
-  }
-  try {
-    await getAuth().updateUser(req.auth.uid, {email, emailVerified: false});
-  } catch (error) {
-    if (error.code === 'auth/email-already-exists') {
-      throw new HttpsError('already-exists', 'Email này đã được tài khoản khác sử dụng');
-    }
-    if (error.code === 'auth/invalid-email') {
-      throw new HttpsError('invalid-argument', 'Địa chỉ email không hợp lệ');
-    }
-    throw error;
-  }
-  return {ok: true, email};
 });
 
 // Profile changes are server-validated because client writes to users/{uid} are denied by Firestore rules.
@@ -491,12 +469,21 @@ exports.setPlayerBlocked = call(async (req) => {
 });
 exports.tick = onSchedule({schedule: 'every 1 minutes', region: 'asia-southeast1'}, async () => {
   const due = await db.collection('rounds').where('status', '==', 'open').where('closesAt', '<=', now()).get();
-  for (const r of due.docs) await lock(r.id, 'scheduler');
+  for (const r of due.docs) {
+    try { await lock(r.id, 'scheduler'); } catch (error) { console.error('Lock failed', r.id, error); }
+  }
   const random = await db.collection('rounds').where('status', '==', 'locked').get();
   for (const r of random.docs) {
-    await settle(r.id, 'scheduler');
+    try { await settle(r.id, 'scheduler'); } catch (error) { console.error('Settlement failed', r.id, error); }
   }
-  for (const game of automaticGames) await ensureAutomaticRound(game, 'scheduler');
+  // Only keep rounds alive while somebody is actually in the room; Spark has a daily write quota.
+  for (const game of automaticGames) {
+    try {
+      const present = await db.collection(`rooms/${game}/members`)
+        .where('lastSeen', '>=', Timestamp.fromMillis(Date.now() - PRESENCE_SECONDS * 1000)).limit(1).get();
+      if (!present.empty) await ensureAutomaticRound(game, 'scheduler');
+    } catch (error) { console.error('Round creation failed', game, error); }
+  }
 });
 const cardTables = require('./card_tables').register({db, call, admin});
 for (const name of ['createCardTable', 'joinCardTable', 'leaveCardTable', 'configureCardBots', 'getCardBotConfig', 'startCardHand', 'cardAction', 'cancelCardTable']) exports[name] = cardTables[name];

@@ -10,8 +10,8 @@ void main() {
     );
   });
 
-  test('live Functions needs no private backend URL', () {
-    expect(backendConfigurationError(false, ''), isNull);
+  test('live Spark requires the VPS backend URL', () {
+    expect(backendConfigurationError(false, ''), isNotNull);
   });
 
   test('live backend requires a secure origin without port or path', () {

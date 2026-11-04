@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart' hide Text;
 
 import 'core/backend_functions.dart';
+import 'core/pending_mutation.dart';
 import 'core/app_preferences.dart';
 import 'core/app_text.dart';
 import 'features/auth/sign_in_screen.dart';
@@ -218,16 +219,21 @@ class _RoundScreenState extends State<RoundScreen> {
   final Set<String> _advancingRounds = {};
   final Set<String> _advancedRounds = {};
   final Map<String, DateTime> _lastAdvanceAttempt = {};
+  final _mutationStore = PendingMutationStore();
+  Map<String, dynamic>? _pendingMutation;
+  bool _pendingLoaded = false;
+  String get _mutationKey => '${widget.uid}_${widget.game.id}';
   bool _touchingRoom = false;
   DateTime? _lastRoomTouch;
   @override
   void initState() {
     super.initState();
     _touchRoom();
+    _loadPendingMutation();
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       now.value = DateTime.now();
       if (_lastRoomTouch == null ||
-          now.value.difference(_lastRoomTouch!).inSeconds >= 10) {
+          now.value.difference(_lastRoomTouch!).inSeconds >= 60) {
         _touchRoom();
       }
     });
@@ -249,7 +255,7 @@ class _RoundScreenState extends State<RoundScreen> {
         region: 'asia-southeast1',
       ).gameCallable('leaveGameRoom').call({'game': widget.game.id});
     } catch (_) {
-      /* Presence expires after 30 seconds. */
+      /* Presence expires after 150 seconds. */
     }
   }
 
@@ -265,6 +271,74 @@ class _RoundScreenState extends State<RoundScreen> {
       // Presence is best effort; it must not block betting.
     } finally {
       _touchingRoom = false;
+    }
+  }
+
+  Future<void> _loadPendingMutation() async {
+    try {
+      final pending = await _mutationStore.load(_mutationKey);
+      if (mounted) setState(() => _pendingMutation = pending);
+    } catch (error) {
+      if (mounted) {
+        setState(() => message = 'Không đọc được cược đang chờ: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _pendingLoaded = true);
+    }
+  }
+
+  Future<void> _beginRoundMutation(
+    String name,
+    Map<String, dynamic> data,
+  ) async {
+    if (!_pendingLoaded || _pendingMutation != null) {
+      throw StateError('Có cược chưa xác nhận; hãy thử lại yêu cầu cũ trước.');
+    }
+    final operation = <String, dynamic>{
+      'name': name,
+      'data': {
+        ...data,
+        'requestId': FirebaseFirestore.instance
+            .collection('requestIds')
+            .doc()
+            .id,
+      },
+    };
+    try {
+      await _mutationStore.save(_mutationKey, operation);
+      if (mounted) setState(() => _pendingMutation = operation);
+      await _sendPendingMutation();
+    } catch (error) {
+      if (mounted) setState(() => message = 'Chưa xác nhận thao tác: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> _sendPendingMutation() async {
+    final operation = _pendingMutation;
+    if (operation == null) return;
+    try {
+      await call(
+        operation['name'] as String,
+        Map<String, dynamic>.from(operation['data'] as Map),
+        rethrowOnError: true,
+      );
+      await _mutationStore.clear(_mutationKey);
+      if (mounted) setState(() => _pendingMutation = null);
+    } on FirebaseFunctionsException catch (error) {
+      // A definitive rejection did not charge points; uncertain network results keep the same requestId.
+      if (const {
+        'invalid-argument',
+        'failed-precondition',
+        'permission-denied',
+        'unauthenticated',
+        'already-exists',
+        'not-found',
+      }.contains(error.code)) {
+        await _mutationStore.clear(_mutationKey);
+        if (mounted) setState(() => _pendingMutation = null);
+      }
+      rethrow;
     }
   }
 
@@ -296,7 +370,9 @@ class _RoundScreenState extends State<RoundScreen> {
     await Future<void>.delayed(const Duration(seconds: 7));
     if (!mounted) return;
     try {
-      await functions.gameCallable('ensureGameRounds').call();
+      await functions.gameCallable('ensureGameRounds').call({
+        'game': widget.game.id,
+      });
     } catch (error) {
       if (mounted) setState(() => message = readableError(error));
     }
@@ -702,6 +778,25 @@ class _RoundScreenState extends State<RoundScreen> {
                   ),
                 ),
               ),
+            if (!widget.isAdmin && _pendingMutation != null)
+              ListTile(
+                title: const Text('Cược/hoàn cược chưa xác nhận'),
+                subtitle: const Text(
+                  'Mạng có thể đã ngắt sau khi server ghi. Thử lại cùng requestId để không trừ điểm hai lần.',
+                ),
+                trailing: TextButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          try {
+                            await _sendPendingMutation();
+                          } catch (_) {
+                            /* Message shown by call. */
+                          }
+                        },
+                  child: const Text('Thử lại'),
+                ),
+              ),
             if (widget.isAdmin)
               const Card(
                 color: Color(0xff191c22),
@@ -709,7 +804,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   leading: Icon(Icons.autorenew, color: Color(0xffffc174)),
                   title: Text('Phiên tự chạy'),
                   subtitle: Text(
-                    'Các phiên tự mở, chốt ngẫu nhiên và chuyển sang phiên kế tiếp. Can thiệp từng phiên ở phần quản trị bên dưới.',
+                    'Phiên mở khi có người trong phòng, tự chốt theo kết quả đã chọn hoặc ngẫu nhiên và chuyển sang phiên kế tiếp.',
                   ),
                 ),
               ),
@@ -921,21 +1016,18 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   !offline &&
                                                   status == 'open' &&
                                                   secondsLeft > 0 &&
-                                                  currentBet.hasData,
-                                              onPlaceBet: (side, value) => call(
-                                                'placeBet',
-                                                {
-                                                  'roundId': id,
-                                                  'side': side,
-                                                  'amount': value,
-                                                  'requestId': FirebaseFirestore
-                                                      .instance
-                                                      .collection('requestIds')
-                                                      .doc()
-                                                      .id,
-                                                },
-                                                rethrowOnError: true,
-                                              ),
+                                                  currentBet.hasData &&
+                                                  _pendingLoaded &&
+                                                  _pendingMutation == null,
+                                              onPlaceBet: (side, value) =>
+                                                  _beginRoundMutation(
+                                                    'placeBet',
+                                                    {
+                                                      'roundId': id,
+                                                      'side': side,
+                                                      'amount': value,
+                                                    },
+                                                  ),
                                             );
                                           },
                                         );
@@ -1005,31 +1097,24 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   !offline &&
                                                   status == 'open' &&
                                                   secondsLeft > 0 &&
-                                                  currentBet.hasData,
+                                                  currentBet.hasData &&
+                                                  _pendingLoaded &&
+                                                  _pendingMutation == null,
                                               onPlaceBet: (side, amount) async {
-                                                await call('placeBet', {
-                                                  'roundId': id,
-                                                  'side': side,
-                                                  'amount': amount,
-                                                  'requestId': FirebaseFirestore
-                                                      .instance
-                                                      .collection('requestIds')
-                                                      .doc()
-                                                      .id,
-                                                }, rethrowOnError: true);
+                                                await _beginRoundMutation(
+                                                  'placeBet',
+                                                  {
+                                                    'roundId': id,
+                                                    'side': side,
+                                                    'amount': amount,
+                                                  },
+                                                );
                                               },
-                                              onRefundBet: () => call(
-                                                'refundMyBet',
-                                                {
-                                                  'roundId': id,
-                                                  'requestId': FirebaseFirestore
-                                                      .instance
-                                                      .collection('requestIds')
-                                                      .doc()
-                                                      .id,
-                                                },
-                                                rethrowOnError: true,
-                                              ),
+                                              onRefundBet: () =>
+                                                  _beginRoundMutation(
+                                                    'refundMyBet',
+                                                    {'roundId': id},
+                                                  ),
                                             );
                                           },
                                         );
@@ -1091,7 +1176,9 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   !offline &&
                                                   status == 'open' &&
                                                   secondsLeft > 0 &&
-                                                  currentBet.hasData,
+                                                  currentBet.hasData &&
+                                                  _pendingLoaded &&
+                                                  _pendingMutation == null,
                                               result: round['result'] is List
                                                   ? round['result'] as List
                                                   : null,
@@ -1102,16 +1189,14 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   : null,
                                               confirmedBets: confirmedBets,
                                               onPlaceBet: (side, amount) async {
-                                                await call('placeBet', {
-                                                  'roundId': id,
-                                                  'side': side,
-                                                  'amount': amount,
-                                                  'requestId': FirebaseFirestore
-                                                      .instance
-                                                      .collection('requestIds')
-                                                      .doc()
-                                                      .id,
-                                                }, rethrowOnError: true);
+                                                await _beginRoundMutation(
+                                                  'placeBet',
+                                                  {
+                                                    'roundId': id,
+                                                    'side': side,
+                                                    'amount': amount,
+                                                  },
+                                                );
                                               },
                                             );
                                           },
@@ -1161,19 +1246,14 @@ class _RoundScreenState extends State<RoundScreen> {
                                                     );
                                                     return;
                                                   }
-                                                  call('placeBet', {
-                                                    'roundId': id,
-                                                    'side': side.$1,
-                                                    'amount': value,
-                                                    'requestId':
-                                                        FirebaseFirestore
-                                                            .instance
-                                                            .collection(
-                                                              'requestIds',
-                                                            )
-                                                            .doc()
-                                                            .id,
-                                                  });
+                                                  _beginRoundMutation(
+                                                    'placeBet',
+                                                    {
+                                                      'roundId': id,
+                                                      'side': side.$1,
+                                                      'amount': value,
+                                                    },
+                                                  ).catchError((_) {});
                                                 },
                                           child: Text('Cược ${side.$2}'),
                                         ),

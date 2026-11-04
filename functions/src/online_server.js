@@ -10,6 +10,8 @@ function reply(res, status, body) {
   res.end(JSON.stringify(body));
 }
 function createApiServer({handlers, verifyToken, maxBytes = 65536}) {
+  const budgets = new Map();
+  let lastMinute = -1;
   return http.createServer(async (req, res) => {
     if (req.url === '/health' && req.method === 'GET') return reply(res, 200, {ok: true});
     const match = /^\/api\/([A-Za-z][A-Za-z0-9]*)$/.exec(req.url || '');
@@ -32,6 +34,14 @@ function createApiServer({handlers, verifyToken, maxBytes = 65536}) {
         throw new HttpsError('invalid-argument', 'Thiếu data');
       let auth;
       try { auth = await verifyToken(token); } catch { return reply(res, 401, {error: {status: 'UNAUTHENTICATED', message: 'Phiên đăng nhập không hợp lệ'}}); }
+      // Limit per authenticated UID, not IP: classmates can share a single NAT.
+      const minute = Math.floor(Date.now() / 60000);
+      if (minute !== lastMinute) { budgets.clear(); lastMinute = minute; }
+      const key = auth.uid;
+      const budget = budgets.get(key) || {calls: 0, leaderboard: 0};
+      if (++budget.calls > 120 || (match[1] === 'getLeaderboard' && ++budget.leaderboard > 6))
+        return reply(res, 429, {error: {status: 'RESOURCE_EXHAUSTED', message: 'Thử lại sau một phút'}});
+      budgets.set(key, budget);
       const data = await handlers[match[1]].run({data: payload.data, auth: {uid: auth.uid, token: auth}});
       reply(res, 200, {data: data ?? null});
     } catch (error) {

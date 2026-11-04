@@ -17,9 +17,12 @@ const handlers = require('./index');
   const tick = async () => {
     if (ticking) return;
     ticking = true;
-    try { await handlers.tick.run(); await handlers.cardTick.run(); }
-    catch (error) { console.error('Scheduler failed:', error); }
-    finally { ticking = false; }
+    try {
+      const results = await Promise.allSettled([handlers.tick.run(), handlers.cardTick.run()]);
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') console.error(['Rounds', 'Cards'][i] + ' scheduler failed:', result.reason);
+      });
+    } finally { ticking = false; }
   };
   await tick();
   const interval = setInterval(tick, 60000);

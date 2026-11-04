@@ -18,6 +18,8 @@ initializeApp({projectId});
 (async () => {
   const auth = getAuth();
   const user = await auth.getUser(uid);
-  await auth.setCustomUserClaims(uid, {...user.customClaims, admin: process.argv[3] !== 'revoke'});
-  console.log(`Đã cập nhật role tại ${projectId}. Đăng nhập lại để làm mới token.`);
+  const revoke = process.argv[3] === 'revoke';
+  await auth.setCustomUserClaims(uid, {...user.customClaims, admin: !revoke});
+  if (revoke) await auth.revokeRefreshTokens(uid);
+  console.log(`Đã cập nhật role tại ${projectId}. ${revoke ? 'Phiên cũ đã bị thu hồi.' : 'Đăng nhập lại để làm mới token.'}`);
 })().catch((error) => { console.error(error.message); process.exitCode = 1; });

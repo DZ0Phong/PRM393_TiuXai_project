@@ -54,7 +54,6 @@ class _AdminConsoleState extends State<AdminConsole> {
 
   Future<void> _ensureProfileAndRounds() async {
     await widget.invoke('ensureProfile', {});
-    await widget.invoke('ensureGameRounds', {});
   }
 
   void _openGame(WidgetBuilder builder) {

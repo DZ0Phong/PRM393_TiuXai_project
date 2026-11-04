@@ -8,6 +8,14 @@ const {getAuth: adminAuth} = require('firebase-admin/auth');
 const {createApiServer} = require('../src/online_server');
 const handlers = require('../src/index');
 
+test('idle scheduler does not generate rounds; active rooms do', async () => {
+  const {getFirestore} = require('firebase-admin/firestore');
+  await handlers.tick.run();
+  for (const game of ['tai_xiu', 'bau_cua', 'xoc_xoc']) {
+    assert.equal((await getFirestore().doc(`rooms/${game}`).get()).exists, false);
+  }
+});
+
 test('online bridge: Firebase SDK auth token, real game handlers, admin claim and ledger', async () => {
   const server = createApiServer({handlers, verifyToken: token => adminAuth().verifyIdToken(token)});
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -29,8 +37,8 @@ test('online bridge: Firebase SDK auth token, real game handlers, admin claim an
     await adminAuth().setCustomUserClaims(admin.user.uid, {admin: true});
     await admin.user.getIdToken(true);
     await admin.call('ensureProfile');
-    const rounds = await player.call('ensureGameRounds');
-    const previousRoundId = rounds.tai_xiu.roundId;
+    const rounds = await player.call('touchGameRoom', {game: 'tai_xiu'});
+    const previousRoundId = rounds.roundId;
     const {getFirestore} = require('firebase-admin/firestore');
     const previous = await getFirestore().doc(`rounds/${previousRoundId}`).get();
     // Earlier integration tests may leave a round open or expired; always start with a fresh deadline.
