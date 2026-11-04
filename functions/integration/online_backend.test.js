@@ -37,4 +37,3 @@ test('online bridge: Firebase SDK auth token, real game handlers, admin claim an
     assert.equal((await admin.call('setRoundOutcome', {roundId, result: [6, 5, 4], reason: 'Lớp kiểm thử'})).mode, 'admin');
   } finally { await Promise.all(apps.map(deleteApp)); server.close(); }
 });
-

@@ -25,4 +25,3 @@ test('private backend authenticates tokens, rejects unknown/scheduler calls and 
     assert.equal((await fetch(`${url}/health`)).status, 200);
   } finally { server.close(); }
 });
-
