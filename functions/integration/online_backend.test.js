@@ -25,15 +25,21 @@ test('online bridge: Firebase SDK auth token, real game handlers, admin claim an
   try {
     const player = await client('player');
     await player.call('ensureProfile');
-    const rounds = await player.call('ensureGameRounds');
-    const roundId = rounds.tai_xiu.roundId;
-    const placed = await player.call('placeBet', {roundId, side: 'tai', amount: 1000, requestId: `bridge_${Date.now()}`});
-    assert.equal(placed.amount, 1000);
-    await assert.rejects(player.call('setRoundOutcome', {roundId, result: [6, 5, 4], reason: 'Lớp kiểm thử'}), /Chỉ quản trị viên/);
     const admin = await client('admin');
     await adminAuth().setCustomUserClaims(admin.user.uid, {admin: true});
     await admin.user.getIdToken(true);
     await admin.call('ensureProfile');
+    const rounds = await player.call('ensureGameRounds');
+    const previousRoundId = rounds.tai_xiu.roundId;
+    const {getFirestore} = require('firebase-admin/firestore');
+    const previous = await getFirestore().doc(`rounds/${previousRoundId}`).get();
+    // Earlier integration tests may leave a round open or expired; always start with a fresh deadline.
+    if (!['settled', 'cancelled'].includes(previous.data().status))
+      await admin.call('cancelRound', {roundId: previousRoundId, reason: 'Dọn phiên kiểm thử'});
+    const {roundId} = await admin.call('startRound', {game: 'tai_xiu', mode: 'admin'});
+    const placed = await player.call('placeBet', {roundId, side: 'tai', amount: 1000, requestId: `bridge_${Date.now()}`});
+    assert.equal(placed.amount, 1000);
+    await assert.rejects(player.call('setRoundOutcome', {roundId, result: [6, 5, 4], reason: 'Lớp kiểm thử'}), /Chỉ quản trị viên/);
     assert.equal((await admin.call('setRoundOutcome', {roundId, result: [6, 5, 4], reason: 'Lớp kiểm thử'})).mode, 'admin');
   } finally { await Promise.all(apps.map(deleteApp)); server.close(); }
 });
