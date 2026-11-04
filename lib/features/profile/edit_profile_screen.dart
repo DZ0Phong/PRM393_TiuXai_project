@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -172,7 +173,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (emailChanged) {
         await FirebaseFunctions.instanceFor(
           region: 'asia-southeast1',
-        ).httpsCallable('updateMyEmail').call({'email': newEmail});
+        ).gameCallable('updateMyEmail').call({'email': newEmail});
         await FirebaseAuth.instance.currentUser?.reload();
         _initialEmail = FirebaseAuth.instance.currentUser?.email ?? newEmail;
         _emailVerified =
@@ -182,7 +183,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final result =
           await FirebaseFunctions.instanceFor(
             region: 'asia-southeast1',
-          ).httpsCallable('updateMyProfile').call<Map<String, dynamic>>({
+          ).gameCallable('updateMyProfile').call<Map<String, dynamic>>({
             'nickname': _nickname.text.trim(),
             'bio': _slogan.text.trim(),
             'birthday': _birthday?.toIso8601String().split('T').first,

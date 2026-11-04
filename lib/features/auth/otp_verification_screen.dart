@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -181,7 +182,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       try {
         await FirebaseFunctions.instanceFor(
           region: 'asia-southeast1',
-        ).httpsCallable('syncVerifiedPhoneNumber').call();
+        ).gameCallable('syncVerifiedPhoneNumber').call();
       } catch (error) {
         // Auth is the source of truth; a profile sync can be retried later.
         if (mounted) {

@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -164,7 +165,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
 
   Future<void> _loadBotConfig(String tableId) async {
     try {
-      final response = await _functions.httpsCallable('getCardBotConfig').call({
+      final response = await _functions.gameCallable('getCardBotConfig').call({
         'tableId': tableId,
       });
       if (!mounted || _tableId != tableId) return;
@@ -229,7 +230,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
       _message = null;
     });
     try {
-      final response = await _functions.httpsCallable(name).call(data);
+      final response = await _functions.gameCallable(name).call(data);
       if (!mounted) return;
       onSuccess?.call(response.data);
       setState(() {
@@ -291,7 +292,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
         _pendingCreate = intent;
       }
       final response = await _functions
-          .httpsCallable('createCardTable')
+          .gameCallable('createCardTable')
           .call(_pendingCreate);
       final data = response.data;
       final id = data is Map ? data['tableId'] : null;
@@ -302,7 +303,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
       final createIntent = _pendingCreate!;
       if (widget.isAdmin && createIntent['botsEnabled'] == true) {
         try {
-          await _functions.httpsCallable('configureCardBots').call({
+          await _functions.gameCallable('configureCardBots').call({
             'tableId': id,
             'enabled': true,
             'maxBots': createIntent['maxBots'],

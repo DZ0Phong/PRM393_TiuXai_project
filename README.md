@@ -2,7 +2,7 @@
 
 Ứng dụng Flutter Android/Firebase viết lại độc lập. **Không có tiền thật, nạp/rút/chuyển đổi, quà hay hiện vật.** Ba trò phiên và Ba Cây đã đối chiếu một phần luật từ source Go88; Poker vẫn khác nhiều chi tiết. **Không tương đương toàn bộ backend Go88**; xem `docs/RULE_PARITY.md` trước khi test thuật toán hoặc đổi luật. Hai tài khoản player và admin dùng Firebase Auth; ví điểm và mọi kết quả do Cloud Functions kiểm soát. Không nhập source, dependency, credential hay asset Go88. Giao diện vẽ bằng Flutter.
 
-## Hiện trạng (03/11/2026)
+## Hiện trạng (04/11/2026)
 
 - **Chơi được trên Emulator:** Tài/Xỉu, Bầu Cua, Xóc Xóc tự mở phiên 30 giây. Admin xem người trong phòng (heartbeat gần đúng, hết hạn sau 30 giây), người thực sự đã cược, tổng điểm và số người theo từng cửa, chênh Tài−Xỉu hoặc chênh cửa cao nhất−thấp nhất. Admin chọn kết quả hợp lệ **một lần trước `closesAt`**, có lý do; kết quả lưu trong `roundPlans` chỉ admin đọc, round công khai không đổi khi admin chọn, không chứa `mode`/`plannedAt`. Sau hạn cược, player gọi `advanceRandomRound` để khóa/chốt ngay theo lựa chọn hoặc server CSPRNG nếu chưa chọn; scheduler mỗi phút là dự phòng khi không ai mở app nên có thể chốt trễ, nhưng **không thêm cửa sổ sửa sau hạn**. Kết quả hiển thị ít nhất 6 giây trước phiên mới; không sửa/chốt lại. Thao tác/lý do/tác động ví ở `auditLogs` chỉ admin đọc. Bầu Cua cho hoàn cược trước hạn; tối đa 100 người/phiên, cược tối thiểu 1000 và bội số 100 (Xóc Xóc bội số 1000). Không xem danh sách người đặt cược từ tài khoản player.
 
@@ -11,9 +11,13 @@
 - Email/password, hồ sơ khởi tạo 10.000 điểm một lần, lịch sử ledger, bảng xếp hạng 20 tài khoản bằng biệt danh ngắn (ẩn email/bot), admin điều chỉnh điểm có lý do/requestId, khóa tài khoản. Không còn callable nạp/rút.
 - Backend giới hạn quyền bằng admin custom claim; Firestore client chỉ đọc dữ liệu cho phép, không được ghi. Firestore audit không phải hệ thống chứng cứ bất biến trước chủ Firebase project.
 
+## Chơi chung online nhóm nhỏ trên Spark (mới)
+
+Đã có backend tự host dùng **Firebase Auth/Firestore thật + Tailscale Serve**, không cần Cloud Functions/Blaze. Đọc [hướng dẫn chi tiết](docs/ONLINE_GROUP.md). Bắt buộc host có service-account credential riêng, Tailscale đã đăng nhập, Firestore indexes đã publish và app build với `--dart-define=EMULATORS=false` và `--dart-define=BACKEND_URL=https://ten-may.ten-tailnet.ts.net`. **Chưa live-deploy hoặc test chéo máy:** máy hiện chưa có credential, Tailscale chưa đăng nhập. Bản online không có URL backend sẽ báo lỗi cấu hình thay vì gọi Functions chưa deploy. Máy host tắt thì game không ghi/chốt được. Không đưa credential vào repo.
+
 ## Cho thành viên nhóm clone và chạy trong Android Studio
 
-**Không cần đăng nhập Firebase Console/Edge, không cần Firebase project thật hoặc thẻ thanh toán để test local.** Mỗi máy chạy riêng Firebase Auth + Firestore + Functions Emulator, nên tài khoản/điểm/phòng trên máy A **không đồng bộ** với máy B. Muốn test nhiều người cùng phòng, mở **hai Android Emulator trên cùng một máy** (hoặc hai client dùng chung một bộ Emulator local); không mở Emulator ra Internet. Chỉ clone repo chưa có server online để cả nhóm ở những máy khác nhau chơi chung.
+**Không cần đăng nhập Firebase Console/Edge, không cần Firebase project thật hoặc thẻ thanh toán để test local.** Mỗi máy chạy riêng Firebase Auth + Firestore + Functions Emulator, nên tài khoản/điểm/phòng trên máy A **không đồng bộ** với máy B. Muốn test nhiều người cùng phòng, mở **hai Android Emulator trên cùng một máy** (hoặc hai client dùng chung một bộ Emulator local); không mở Emulator ra Internet. Chỉ clone repo không tự có server online; muốn chơi chung từ máy khác cần cấu hình host riêng theo `docs/ONLINE_GROUP.md`.
 
 1. Có quyền đọc repo GitHub private; cài Android Studio + Android SDK/Android Emulator, Flutter SDK (Dart >=3.8) và Flutter/Dart plugin, Node.js 24, Java 21. Kiểm tra `flutter doctor -v`, `node --version`, `java -version`. Mỗi máy tự cài dependency, không commit `node_modules`, `build` hay credential.
 2. Clone/mở **thư mục gốc chứa `pubspec.yaml` và `firebase.json`** trong Android Studio. Tại terminal PowerShell ở thư mục này, chạy **một lần sau khi clone/cập nhật lockfile**:
@@ -56,7 +60,7 @@
 - Quyền **Owner trên Firebase Console không tự biến thành admin trong game**. Admin game là Auth user riêng có custom claim `admin: true`, do Firebase Admin SDK trên môi trường tin cậy cấp cho UID; UI hoặc Firestore không được tự gán. Sau khi cấp, user đăng xuất/đăng nhập để làm mới token. Script `functions/scripts/set-admin.js UID` dùng được trên Auth Emulator với hai biến môi trường ở trên; muốn cấp trên project thật phải cấu hình riêng Admin SDK/ADC cho **đúng project** `ad2-8abfa540`, không để biến `FIREBASE_AUTH_EMULATOR_HOST` còn tồn tại, không đưa service-account key vào repo. Phiên làm việc này không cấp claim admin cho bất kỳ user thật nào; chưa xác minh các claim hiện có.
 - Form đăng ký Emulator nhận nickname 4–20 ký tự và tạo `nickname@demo.test` (không phải hộp thư nhận email). Bản kết nối Firebase thật yêu cầu email thật để có thể khôi phục tài khoản; chủ project có thể tạo user bằng email thật trên Auth Console rồi cấp claim bằng script tin cậy. Luồng quên mật khẩu qua SMS chưa được cấu hình nên không hiển thị trên màn đăng nhập.
 
-**Spark không deploy được Cloud Functions**, trong khi đăng ký hồ sơ/ví, đặt cược, chốt phiên và bàn bài đều gọi Functions. Vì thế **chưa có APK chơi chung qua Cloud**: debug APK local chỉ chạy đầy đủ khi có bộ Emulator trên cùng máy. Không đổi sang Blaze hay triển khai bất kỳ dịch vụ có thể tính phí nếu nhóm chưa quyết định. Chia sẻ quyền Owner cho thành viên hoặc bật Auth/Firestore không thay thế được Functions.
+**Spark không deploy được Cloud Functions**, trong khi đăng ký hồ sơ/ví, đặt cược, chốt phiên và bàn bài đều cần backend tin cậy. Vì thế APK debug local mặc định chỉ chạy đầy đủ khi có Emulator. Phương án online nhóm nhỏ dùng Firebase thật + backend tự host qua Tailscale theo `docs/ONLINE_GROUP.md`; chưa cấu hình host/credential thực tế. Không đổi sang Blaze hay triển khai bất kỳ dịch vụ có thể tính phí nếu nhóm chưa quyết định. Chia sẻ quyền Owner hoặc chỉ bật Auth/Firestore không thay thế được backend tự host.
 
 ## Chạy local
 
@@ -97,7 +101,7 @@ npm.cmd --prefix functions run check
 node functions/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --project demo-tai-xiu --only auth,firestore,functions "node --test --test-concurrency=1 functions/integration/emulator.test.js functions/integration/card_tables.test.js"
 ```
 
-CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Clone repo chạy được với Firebase Emulator theo các lệnh trên; chưa phải bản APK cho các máy trong lớp. Chưa có APK release có chữ ký phân phối hay deploy production. `google-services.json` chỉ chứa cấu hình client đã được merge; không đưa key ký APK, mật khẩu, token CLI hoặc service account vào Git.
+CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulator (gồm hai trò bài và Firestore rules). Clone repo chạy được với Firebase Emulator theo các lệnh trên; xem `docs/ONLINE_GROUP.md` để nhóm nhỏ tự host online, chưa phải APK công khai cho cả lớp. Chưa có APK release có chữ ký phân phối hay deploy production. `google-services.json` chỉ chứa cấu hình client đã được merge; không đưa key ký APK, mật khẩu, token CLI hoặc service account vào Git.
 
 ## Quy tắc và hạn chế
 

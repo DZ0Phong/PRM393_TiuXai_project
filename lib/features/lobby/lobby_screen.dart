@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -69,7 +70,7 @@ class _LobbyState extends State<LobbyScreen> {
     if (ensuringRounds) return;
     ensuringRounds = true;
     try {
-      await widget.functions.httpsCallable('ensureGameRounds').call();
+      await widget.functions.gameCallable('ensureGameRounds').call();
     } catch (_) {
       // A later timer tick retries if the function or connection is unavailable.
     } finally {
@@ -79,8 +80,8 @@ class _LobbyState extends State<LobbyScreen> {
 
   Future<bool> _loadProfile() async {
     final token = await widget.user.getIdTokenResult();
-    await widget.functions.httpsCallable('ensureProfile').call();
-    await widget.functions.httpsCallable('ensureGameRounds').call();
+    await widget.functions.gameCallable('ensureProfile').call();
+    await widget.functions.gameCallable('ensureGameRounds').call();
     return token.claims?['admin'] == true;
   }
 

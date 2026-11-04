@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -102,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showLeaderboardSheet() {
-    final ranking = _functions.httpsCallable('getLeaderboard').call();
+    final ranking = _functions.gameCallable('getLeaderboard').call();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xff191c22),

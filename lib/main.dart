@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
     show kDebugMode, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart' hide Text;
 
+import 'core/backend_functions.dart';
 import 'core/app_preferences.dart';
 import 'core/app_text.dart';
 import 'features/auth/sign_in_screen.dart';
@@ -81,6 +82,20 @@ Future<void> main() async {
         ),
       ),
     );
+    if (backendUrl.isNotEmpty && emulator) {
+      throw StateError('BACKEND_URL chỉ dùng với Firebase thật.');
+    }
+    final endpoint = Uri.tryParse(backendUrl);
+    if (!emulator &&
+        (endpoint == null ||
+            endpoint.scheme != 'https' ||
+            !endpoint.host.endsWith('.ts.net') ||
+            endpoint.userInfo.isNotEmpty ||
+            endpoint.hasQuery ||
+            endpoint.hasFragment ||
+            endpoint.path.isNotEmpty)) {
+      throw StateError('Bản online cần BACKEND_URL là HTTPS gốc của máy nhóm.');
+    }
     if (emulator) {
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
@@ -142,7 +157,7 @@ class GameApp extends StatelessWidget {
                   uid: user.uid,
                   initiallyExpanded: true,
                   invoke: (name, data) async {
-                    await functions.httpsCallable(name).call(data);
+                    await functions.gameCallable(name).call(data);
                   },
                   roundBuilder: (game) =>
                       RoundScreen(game: game, uid: user.uid, isAdmin: true),
@@ -225,7 +240,7 @@ class _RoundScreenState extends State<RoundScreen> {
     try {
       await FirebaseFunctions.instanceFor(
         region: 'asia-southeast1',
-      ).httpsCallable('leaveGameRoom').call({'game': widget.game.id});
+      ).gameCallable('leaveGameRoom').call({'game': widget.game.id});
     } catch (_) {
       /* Presence expires after 30 seconds. */
     }
@@ -238,7 +253,7 @@ class _RoundScreenState extends State<RoundScreen> {
     try {
       await FirebaseFunctions.instanceFor(
         region: 'asia-southeast1',
-      ).httpsCallable('touchGameRoom').call({'game': widget.game.id});
+      ).gameCallable('touchGameRoom').call({'game': widget.game.id});
     } catch (_) {
       // Presence is best effort; it must not block betting.
     } finally {
@@ -257,7 +272,7 @@ class _RoundScreenState extends State<RoundScreen> {
       message = null;
     });
     try {
-      await functions.httpsCallable(name).call(data);
+      await functions.gameCallable(name).call(data);
       if (name == 'cancelRound') {
         unawaited(_ensureNextSessions());
       }
@@ -274,7 +289,7 @@ class _RoundScreenState extends State<RoundScreen> {
     await Future<void>.delayed(const Duration(seconds: 7));
     if (!mounted) return;
     try {
-      await functions.httpsCallable('ensureGameRounds').call();
+      await functions.gameCallable('ensureGameRounds').call();
     } catch (error) {
       if (mounted) setState(() => message = readableError(error));
     }
@@ -291,9 +306,9 @@ class _RoundScreenState extends State<RoundScreen> {
     _lastAdvanceAttempt[roundId] = nowAt;
     _advancingRounds.add(roundId);
     try {
-      final response = await functions.httpsCallable('advanceRandomRound').call(
-        {'roundId': roundId},
-      );
+      final response = await functions.gameCallable('advanceRandomRound').call({
+        'roundId': roundId,
+      });
       final data = response.data;
       if (data is Map && data['notDue'] == true) return;
       if (data is Map && data['waiting'] == true) return;

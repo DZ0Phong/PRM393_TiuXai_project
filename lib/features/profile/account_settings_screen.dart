@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -110,7 +111,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       await FirebaseFunctions.instanceFor(
         region: 'asia-southeast1',
-      ).httpsCallable('updateMyPrivacyPreferences').call({
+      ).gameCallable('updateMyPrivacyPreferences').call({
         'preferences': {key: next},
       });
     } on FirebaseFunctionsException catch (error) {

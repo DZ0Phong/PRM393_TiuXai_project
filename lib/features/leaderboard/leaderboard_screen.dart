@@ -1,3 +1,4 @@
+import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
@@ -22,7 +23,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Future<List<_LeaderboardEntry>> _loadRanking() async {
-    final result = await widget.functions.httpsCallable('getLeaderboard').call();
+    final result = await widget.functions.gameCallable('getLeaderboard').call();
     final data = result.data;
     if (data is! List) {
       throw const FormatException('Dữ liệu bảng xếp hạng không hợp lệ.');
@@ -54,7 +55,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           future: _ranking,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: _gold));
+              return const Center(
+                child: CircularProgressIndicator(color: _gold),
+              );
             }
             if (snapshot.hasError) {
               return _MessageState(
@@ -103,17 +106,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   if (challengers.isNotEmpty) ...[
                     _SectionTitle(
                       icon: Icons.trending_up,
-                      title: 'Thứ hạng ${challengers.first.rank}–${challengers.last.rank}',
+                      title:
+                          'Thứ hạng ${challengers.first.rank}–${challengers.last.rank}',
                     ),
                     const SizedBox(height: 10),
-                    for (final entry in challengers)
-                      _RankingTile(entry: entry),
+                    for (final entry in challengers) _RankingTile(entry: entry),
                   ],
                   const SizedBox(height: 12),
                   const Text(
                     'Thứ hạng được sắp theo số dư xu ảo. Danh sách hiển thị tối đa 20 người chơi và được tải lại khi bạn làm mới.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xff9b9ca5), fontSize: 12, height: 1.5),
+                    style: TextStyle(
+                      color: Color(0xff9b9ca5),
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
                   ),
                 ],
               ),
@@ -145,7 +152,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             children: [
               const Text(
                 'HALL OF FAME · XU ẢO',
-                style: TextStyle(color: _gold, fontWeight: FontWeight.bold, letterSpacing: 1),
+                style: TextStyle(
+                  color: _gold,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
               ),
               const SizedBox(height: 5),
               Text(
@@ -170,7 +181,11 @@ class _LeaderboardEntry {
   final String nickname;
   final num balance;
 
-  const _LeaderboardEntry({required this.rank, required this.nickname, required this.balance});
+  const _LeaderboardEntry({
+    required this.rank,
+    required this.nickname,
+    required this.balance,
+  });
 
   factory _LeaderboardEntry.fromMap(Map row) {
     final rawRank = row['rank'];
@@ -178,7 +193,9 @@ class _LeaderboardEntry {
     return _LeaderboardEntry(
       rank: rawRank is num ? rawRank.toInt() : int.tryParse('$rawRank') ?? 0,
       nickname: row['nickname']?.toString() ?? 'Người chơi',
-      balance: rawBalance is num ? rawBalance : num.tryParse('$rawBalance') ?? 0,
+      balance: rawBalance is num
+          ? rawBalance
+          : num.tryParse('$rawBalance') ?? 0,
     );
   }
 }
@@ -198,7 +215,10 @@ class _Podium extends StatelessWidget {
           Expanded(
             child: byRank[rank] == null
                 ? const SizedBox(height: 118)
-                : _PodiumPlace(entry: byRank[rank]!, height: rank == 1 ? 166 : 132),
+                : _PodiumPlace(
+                    entry: byRank[rank]!,
+                    height: rank == 1 ? 166 : 132,
+                  ),
           ),
       ],
     );
@@ -222,15 +242,34 @@ class _PodiumPlace extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Icon(entry.rank == 1 ? Icons.workspace_premium : Icons.shield, color: color, size: 28),
+          Icon(
+            entry.rank == 1 ? Icons.workspace_premium : Icons.shield,
+            color: color,
+            size: 28,
+          ),
           const SizedBox(height: 6),
-          Text('#${entry.rank}', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          Text(
+            '#${entry.rank}',
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 5),
-          Text(entry.nickname, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 12)),
+          Text(
+            entry.nickname,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 12),
+          ),
           const SizedBox(height: 4),
-          Text(_formatBalance(entry.balance), maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+          Text(
+            _formatBalance(entry.balance),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
           const SizedBox(height: 8),
           Container(
             height: height - 82,
@@ -238,10 +277,19 @@ class _PodiumPlace extends StatelessWidget {
             padding: const EdgeInsets.only(top: 10),
             decoration: BoxDecoration(
               color: color.withValues(alpha: .12),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
               border: Border.all(color: color.withValues(alpha: .45)),
             ),
-            child: Text('${entry.rank}', style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w900)),
+            child: Text(
+              '${entry.rank}',
+              style: TextStyle(
+                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ],
       ),
@@ -264,14 +312,38 @@ class _RankingTile extends StatelessWidget {
     ),
     child: Row(
       children: [
-        SizedBox(width: 34, child: Text(entry.rank.toString().padLeft(2, '0'),
-            style: const TextStyle(color: Color(0xffa8a9b1), fontWeight: FontWeight.bold))),
-        const CircleAvatar(radius: 17, backgroundColor: Color(0xff30333a),
-          child: Icon(Icons.person, color: Color(0xffc6c7ce), size: 19)),
+        SizedBox(
+          width: 34,
+          child: Text(
+            entry.rank.toString().padLeft(2, '0'),
+            style: const TextStyle(
+              color: Color(0xffa8a9b1),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const CircleAvatar(
+          radius: 17,
+          backgroundColor: Color(0xff30333a),
+          child: Icon(Icons.person, color: Color(0xffc6c7ce), size: 19),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: Text(entry.nickname, style: const TextStyle(color: Color(0xffe1e2eb), fontWeight: FontWeight.w600))),
-        Text('${_formatBalance(entry.balance)} TX',
-            style: const TextStyle(color: Color(0xffffc174), fontWeight: FontWeight.bold)),
+        Expanded(
+          child: Text(
+            entry.nickname,
+            style: const TextStyle(
+              color: Color(0xffe1e2eb),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Text(
+          '${_formatBalance(entry.balance)} TX',
+          style: const TextStyle(
+            color: Color(0xffffc174),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     ),
   );
@@ -284,8 +356,18 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    children: [Icon(icon, color: const Color(0xffffc174)), const SizedBox(width: 8),
-      Text(title, style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 16, fontWeight: FontWeight.bold))],
+    children: [
+      Icon(icon, color: const Color(0xffffc174)),
+      const SizedBox(width: 8),
+      Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xffe1e2eb),
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ],
   );
 }
 
@@ -299,12 +381,19 @@ class _MessageState extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: Padding(
       padding: const EdgeInsets.all(28),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: const Color(0xffa08e7a), size: 46),
-        const SizedBox(height: 12),
-        Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xffe1e2eb))),
-        ?action,
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: const Color(0xffa08e7a), size: 46),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xffe1e2eb)),
+          ),
+          ?action,
+        ],
+      ),
     ),
   );
 }
