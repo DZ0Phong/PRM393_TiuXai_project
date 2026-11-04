@@ -14,17 +14,21 @@ void main() {
     expect(backendConfigurationError(false, ''), isNull);
   });
 
-  test('private backend still requires a secure Tailscale origin', () {
+  test('live backend requires a secure origin without port or path', () {
     expect(
       backendConfigurationError(false, 'https://host.tailnet.ts.net'),
       isNull,
     );
+    expect(backendConfigurationError(false, 'https://203.0.113.10'), isNull);
+    expect(backendConfigurationError(false, 'https://backend.example.com'), isNull);
     for (final url in [
       'http://host.tailnet.ts.net',
       'https://host.tailnet.ts.net:8765',
       'https://host.tailnet.ts.net/path',
       'https://host.tailnet.ts.net?token=secret',
-      'https://other.example.com',
+      'https://localhost',
+      'https://127.0.0.1',
+      'https://user:pass@backend.example.com',
     ]) {
       expect(backendConfigurationError(false, url), isNotNull, reason: url);
     }

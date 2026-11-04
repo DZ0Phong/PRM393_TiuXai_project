@@ -1,6 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
-// Optional private HTTPS backend; otherwise call deployed Firebase Functions.
+// Optional HTTPS backend; otherwise call deployed Firebase Functions.
 const backendUrl = String.fromEnvironment('BACKEND_URL');
 
 String? backendConfigurationError(bool emulator, String url) {
@@ -11,13 +11,15 @@ String? backendConfigurationError(bool emulator, String url) {
   final endpoint = Uri.tryParse(url);
   if (endpoint == null ||
       endpoint.scheme != 'https' ||
-      !endpoint.host.endsWith('.ts.net') ||
+      endpoint.host.isEmpty ||
+      endpoint.host == 'localhost' ||
+      endpoint.host == '127.0.0.1' ||
       endpoint.userInfo.isNotEmpty ||
       endpoint.hasPort ||
       endpoint.hasQuery ||
       endpoint.hasFragment ||
       endpoint.path.isNotEmpty) {
-    return 'BACKEND_URL phải là HTTPS gốc của máy nhóm trên Tailscale.';
+    return 'BACKEND_URL phải là HTTPS origin của backend, không có port/path/query.';
   }
   return null;
 }
