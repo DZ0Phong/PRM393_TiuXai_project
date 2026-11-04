@@ -10,9 +10,15 @@ const handlers = require('../src/index');
 
 test('idle scheduler does not generate rounds; active rooms do', async () => {
   const {getFirestore} = require('firebase-admin/firestore');
+  const before = {};
+  for (const game of ['tai_xiu', 'bau_cua', 'xoc_xoc']) {
+    const members = await getFirestore().collection(`rooms/${game}/members`).get();
+    await Promise.all(members.docs.map(doc => doc.ref.delete())); // Isolate presence from earlier emulator tests.
+    before[game] = (await getFirestore().doc(`rooms/${game}`).get()).data()?.roundId;
+  }
   await handlers.tick.run();
   for (const game of ['tai_xiu', 'bau_cua', 'xoc_xoc']) {
-    assert.equal((await getFirestore().doc(`rooms/${game}`).get()).exists, false);
+    assert.equal((await getFirestore().doc(`rooms/${game}`).get()).data()?.roundId, before[game]);
   }
 });
 

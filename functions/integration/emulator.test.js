@@ -96,10 +96,11 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const boss = await client(0); await adminAuth(app).setCustomUserClaims(boss.user.uid, {admin: true}); await boss.user.getIdToken(true); await boss.call('ensureProfile');
     const p = await client(1); await p.call('ensureProfile');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 10000);
-    await p.call('touchGameRoom', {game: 'tai_xiu'});
+    const joined = await p.call('touchGameRoom', {game: 'tai_xiu'});
     assert.equal((await db.doc(`rooms/tai_xiu/members/${p.user.uid}`).get()).exists, true);
     await p.call('leaveGameRoom', {game: 'tai_xiu'});
     assert.equal((await db.doc(`rooms/tai_xiu/members/${p.user.uid}`).get()).exists, false);
+    await boss.call('cancelRound', {roundId: joined.roundId, reason: 'Dọn phiên kiểm thử'});
     await assert.rejects(p.call('startRound', {game: 'tai_xiu', mode: 'admin'}));
     await assert.rejects(p.call('adjustBalance', {uid: p.user.uid, delta: 100, reason: 'Không có quyền', requestId: 'no-rights-001'}));
     await assert.rejects(p.call('wallet', {kind: 'deposit', amount: 100}));
