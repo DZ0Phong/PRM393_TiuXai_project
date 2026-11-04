@@ -12,7 +12,7 @@
 
 1. Trong Firebase Console, xác nhận project ID `ad2-8abfa540`, Spark, Email/Password bật, Firestore Rules đúng `firestore.rules`. **Xuất bản 3 composite indexes trong `firestore.indexes.json`** (Firebase CLI: `firebase deploy --only firestore:indexes --project ad2-8abfa540`, sau khi `firebase login` bằng owner); đợi trạng thái Enabled. Rules đã publish ngày 03/11/2026 nhưng indexes **chưa xác minh**. Không deploy Functions (Spark không hỗ trợ).
 2. Dùng một **service account cho project thật có quyền Firebase Auth và Firestore** trên riêng máy host. Firebase Console → Project settings → Service accounts → tạo JSON private key khi thực sự dùng; lưu ngoài repo, bảo vệ file chỉ owner, không gửi vào chat/GitHub/nhóm, xóa/thu hồi sau buổi học. Cách khác là ADC từ gcloud + OAuth Desktop client riêng (gcloud ADC mặc định không được Firebase Auth chấp nhận); xem tài liệu Firebase Admin SDK. Không dùng key của thành viên khác. Đường dẫn JSON chỉ đặt trong biến môi trường cục bộ.
-3. Cài Tailscale và đăng nhập một tailnet riêng cho nhóm; bật MagicDNS + HTTPS certificates, chỉ mời thành viên tin cậy. Tailscale Personal miễn phí tối đa 6 users (nếu nhóm vượt giới hạn, cần phương án khác). **Serve, không Funnel**; không port-forward và không bật firewall inbound tới 8765.
+3. Cài Tailscale và đăng nhập một tailnet riêng cho nhóm; bật MagicDNS + HTTPS certificates, chỉ mời thành viên tin cậy. Tailscale Personal miễn phí tối đa 6 users **trong tailnet của chủ nhóm**. Nếu đông hơn, có thể chia sẻ riêng **máy host** cho từng người từ tailnet của họ bằng node sharing (không tính vào số user của tailnet chủ); mỗi người vẫn phải cài Tailscale, đăng nhập, nhận lời mời và kiểm ACL/MagicDNS. Chưa kiểm thử 35 người đồng thời. **Serve, không Funnel**; không port-forward và không bật firewall inbound tới 8765.
 4. PowerShell trong gốc repo (mỗi terminal mới cần thiết lập biến):
 
    ```powershell
@@ -48,7 +48,7 @@
 
 ## Giới hạn/an toàn
 
-- Spark vẫn có hạn mức Auth/Firestore; nhiều người và listener realtime có thể vượt mức miễn phí. Đọc dashboard usage trong buổi test. Tailscale Personal hiện giới hạn 6 users. Chưa có load test thực tế, App Check, giám sát 24/7, backup tự động, hay production service manager.
+- Spark vẫn có hạn mức Auth/Firestore; nhiều người và listener realtime có thể vượt mức miễn phí. Đọc dashboard usage trong buổi test. Tailscale Personal giới hạn 6 users trong tailnet của chủ nhóm; node sharing cho người ngoài tailnet không làm tăng số user này, nhưng onboarding 35 người và tải host vẫn cần kiểm thử. Chưa có load test thực tế, App Check, giám sát 24/7, backup tự động, hay production service manager.
 - Token Firebase thật được xác minh trên host (kể cả revoked), endpoint chỉ bind loopback và chia qua Tailscale HTTPS; Firestore Rules chặn client ghi, Admin SDK/key chỉ nằm trên host. Dù vậy ai cầm service-account key/chiếm host có toàn quyền; cần khóa máy và thu hồi key sau demo.
 - **Không chạy** `emulators:start` với project thật và chỉ một phần service; API chưa emulated có thể trỏ production. Đừng mở port 9099/8080/5001/8765 công khai. Không dùng Funnel cho backend.
-- Nếu cần người ngoài tailnet (cả lớp >6 users), uptime độc lập máy host hoặc iPhone không có Android Studio, cần lựa chọn triển khai khác và quyết định rõ hạn mức/chi phí; **không tự nâng Blaze**. Bản này phục vụ nhóm nhỏ vài ngày, không phải hosting công cộng.
+- Nếu cần uptime độc lập máy host, không muốn từng người cài Tailscale/nhận node share, hoặc iPhone không có Android Studio, cần lựa chọn triển khai khác và quyết định rõ hạn mức/chi phí; **không tự nâng Blaze**. Bản này phục vụ nhóm nhỏ vài ngày, không phải hosting công cộng.
