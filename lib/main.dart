@@ -200,12 +200,16 @@ class _RoundScreenState extends State<RoundScreen> {
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream =
       FirebaseFirestore.instance.doc('users/${widget.uid}').snapshots();
   String? _observedRoundId;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _roundStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _betStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _planStream;
 
   void _observeRound(String id) {
     if (_observedRoundId == id) return;
     _observedRoundId = id;
+    _roundStream = FirebaseFirestore.instance
+        .doc('rounds/$id')
+        .snapshots(includeMetadataChanges: true);
     _betStream = FirebaseFirestore.instance
         .doc('rounds/$id/bets/${widget.uid}')
         .snapshots();
@@ -309,7 +313,13 @@ class _RoundScreenState extends State<RoundScreen> {
       if (mounted) setState(() => _pendingMutation = operation);
       await _sendPendingMutation();
     } catch (error) {
-      if (mounted) setState(() => message = 'Chưa xác nhận thao tác: $error');
+      if (mounted) {
+        setState(
+          () => message = _pendingMutation == null
+              ? readableError(error)
+              : 'Chưa xác nhận thao tác: ${readableError(error)}',
+        );
+      }
       rethrow;
     }
   }
@@ -347,7 +357,10 @@ class _RoundScreenState extends State<RoundScreen> {
     Map<String, dynamic> data, {
     bool rethrowOnError = false,
   }) async {
-    if (busy) return;
+    if (busy) {
+      if (rethrowOnError) throw StateError('Thao tác khác đang xử lý; hãy thử lại.');
+      return;
+    }
     setState(() {
       busy = true;
       message = null;
@@ -833,9 +846,7 @@ class _RoundScreenState extends State<RoundScreen> {
                 }
                 return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   key: ValueKey(id),
-                  stream: FirebaseFirestore.instance
-                      .doc('rounds/$id')
-                      .snapshots(includeMetadataChanges: true),
+                  stream: _roundStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return Text('Không tải được phiên: ${snapshot.error}');

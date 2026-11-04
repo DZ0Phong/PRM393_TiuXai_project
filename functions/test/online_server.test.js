@@ -42,3 +42,28 @@ test('per-UID quota rejects repeated expensive reads before invoking handler', a
     assert.equal(await call('bob'), 200);
   } finally { server.close(); }
 });
+
+
+test('Android callable integer wrappers decode recursively and reject unsafe values', async () => {
+  const server = createApiServer({handlers: {placeBet: {run: async ({data}) => data}},
+    verifyToken: async () => ({uid: 'alice'})});
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/api/placeBet`;
+    const post = async (data) => {
+      const response = await fetch(url, {method: 'POST', headers: {
+        'content-type': 'application/json', authorization: 'Bearer valid',
+      }, body: JSON.stringify({data})});
+      return {status: response.status, body: await response.json()};
+    };
+    const int64 = value => ({'@type': 'type.googleapis.com/google.protobuf.Int64Value', value});
+    assert.deepEqual(await post({amount: int64('10000'), nested: [int64('-2'), 1000]}),
+        {status: 200, body: {data: {amount: 10000, nested: [-2, 1000]}}});
+    assert.deepEqual(await post({amount: {'@type': 'type.googleapis.com/google.protobuf.UInt64Value', value: '5'}}),
+        {status: 200, body: {data: {amount: 5}}});
+    for (const amount of [int64('9007199254740992'), int64('10.5'), int64(10000),
+      {...int64('10000'), extra: true}]) {
+      assert.equal((await post({amount})).status, 400);
+    }
+  } finally { server.close(); }
+});

@@ -117,7 +117,13 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
       await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
       await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
       await assert.rejects(p.call('placeBet', {roundId, side, amount: 10000, requestId: `first-${game}`}));
-      if (game === 'bau_cua') await p.call('placeBet', {roundId, side: 'bau', amount: 1000, requestId: 'second-bau'});
+      if (game === 'bau_cua') {
+        await p.call('placeBet', {roundId, side: 'bau', amount: 1000, requestId: 'second-bau'});
+        const beforeReplay = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
+        const replay = await p.call('placeBet', {roundId, side, amount: 1000, requestId: `first-${game}`});
+        assert.equal(replay.amount, 1000); assert.deepEqual(replay.stakes, {cua: 1000});
+        assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeReplay);
+      }
       const stakeStats = (await db.doc(`rounds/${roundId}`).get()).data();
       assert.equal(stakeStats.totals[side], 1000);
       assert.equal(stakeStats.playerCounts[side], 1);
@@ -160,6 +166,16 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     assert.equal((await db.doc(`users/${p.user.uid}/operations/result_${cancelled}`).get()).data().kind, 'refund');
     await assert.rejects(boss.call('setRoundOutcome', {roundId: cancelled, result: [2, 3, 6], reason: 'Không chốt đã hủy'}));
     const random = await boss.call('startRound', {game: 'bau_cua', mode: 'random'});
+    const refundBet = {roundId: random.roundId, side: 'cua', amount: 1000, requestId: 'refunded-bet-001'};
+    const startingBalance = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
+    await Promise.all([p.call('placeBet', refundBet), p.call('placeBet', refundBet)]);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance - 1000);
+    const refund = {roundId: random.roundId, requestId: 'refund-001'};
+    await Promise.all([p.call('refundMyBet', refund), p.call('refundMyBet', refund)]);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance);
+    assert.equal((await p.call('placeBet', refundBet)).amount, 1000);
+    await assert.rejects(p.call('placeBet', {...refundBet, side: 'bau'}));
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance);
     await db.doc(`rounds/${random.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     await p.call('advanceRandomRound', {roundId: random.roundId});
     await p.call('advanceRandomRound', {roundId: random.roundId});

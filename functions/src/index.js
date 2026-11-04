@@ -246,7 +246,7 @@ exports.placeBet = call(async (req) => {
     if (existing.exists) {
       const old = existing.data();
       if (old.side !== side || old.stake !== amount) throw new HttpsError('already-exists', 'requestId đã dùng với cược khác');
-      return b.data();
+      return old.acceptedBet || b.data(); // Legacy operations predate immutable receipts.
     }
     if (r.data().status !== 'open' || r.data().closesAt.toMillis() <= Date.now()) fail('Đã khóa cược');
     if (u.data().balance < amount) fail('Không đủ điểm');
@@ -268,7 +268,7 @@ exports.placeBet = call(async (req) => {
       at: old?.at || now(), lastAt: now()};
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);
-    tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, at: now()});
+    tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, acceptedBet: data, at: now()});
     tx.update(ref, {...stats, betCount: r.data().betCount + (old ? 0 : 1)});
     audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, side, amount});
     return data;

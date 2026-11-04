@@ -63,7 +63,16 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     return valid >= 1000 ? valid : 0;
   }
 
-  bool get canBet => widget.enabled && !sending;
+  bool get canBet =>
+      widget.enabled &&
+      widget.status == 'open' &&
+      widget.secondsLeft > 0 &&
+      !sending;
+  bool get canSubmit =>
+      canBet &&
+      total > 0 &&
+      total <= widget.balance &&
+      total + confirmedTotal <= 1000000;
 
   @override
   void initState() {
@@ -83,6 +92,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
+      sending = false;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       revealed = true;
@@ -90,6 +100,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   }
 
   void _add(String side) {
+    if (!canBet) return;
     final amount = allInSelected ? allInAmount : selectedChip;
     final next = total + amount;
     if (amount <= 0) {
@@ -111,20 +122,43 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   }
 
   Future<void> _submit() async {
-    if (!canBet || total == 0) return;
+    if (!canSubmit) return;
+    final roundId = widget.roundId;
+    final placeBet = widget.onPlaceBet;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
+    String? attemptedSide;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
-        await widget.onPlaceBet(entry.key, entry.value);
-        if (mounted) setState(() => bets[entry.key] = 0);
+        if (!mounted ||
+            widget.roundId != roundId ||
+            !widget.enabled ||
+            widget.status != 'open' ||
+            widget.secondsLeft <= 0 ||
+            entry.value > widget.balance ||
+            entry.value + confirmedTotal > 1000000) {
+          break;
+        }
+        attemptedSide = entry.key;
+        await placeBet(entry.key, entry.value);
+        if (!mounted || widget.roundId != roundId) break;
+        setState(() => bets[entry.key] = 0);
+        attemptedSide = null;
       }
     } catch (error) {
-      if (mounted) {
-        _notice('Một số cửa chưa gửi được. Cược đã nhận vẫn được giữ: $error');
+      if (mounted && widget.roundId == roundId) {
+        // A network failure can mean the server accepted the bet; never replay its draft.
+        if (attemptedSide != null) {
+          setState(() => bets[attemptedSide!] = 0);
+        }
+        _notice(
+          'Chưa xác nhận được cửa vừa gửi; kiểm tra cược trên máy chủ trước khi chọn lại: $error',
+        );
       }
     } finally {
-      if (mounted) setState(() => sending = false);
+      if (mounted && widget.roundId == roundId) {
+        setState(() => sending = false);
+      }
     }
   }
 
@@ -154,6 +188,11 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           _chipSelector(),
           const SizedBox(height: 8),
           _confirmButton(),
+          if (canBet && total > 0 && !canSubmit)
+            TextButton(
+              onPressed: () => setState(() => bets.updateAll((_, _) => 0)),
+              child: const Text('Xóa cược chưa gửi'),
+            ),
           const SizedBox(height: 8),
           _road(),
           const SizedBox(height: 8),
@@ -638,7 +677,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   };
 
   Widget _confirmButton() => FilledButton.icon(
-    onPressed: canBet && total > 0 ? _submit : null,
+    onPressed: canSubmit ? _submit : null,
     icon: const Icon(Icons.verified_outlined),
     label: Text(
       sending ? 'ĐANG GỬI...' : 'XÁC NHẬN CƯỢC • ${format(total)} XU',
@@ -658,21 +697,24 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     decoration: _panel(),
     child: Column(
       children: [
-        ListTile(
-          leading: const Icon(Icons.verified_user, color: gold),
-          title: const Text(
-            'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
-            style: TextStyle(
-              color: Color(0xffe1e2eb),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+        Material(
+          type: MaterialType.transparency,
+          child: ListTile(
+            leading: const Icon(Icons.verified_user, color: gold),
+            title: const Text(
+              'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
+              style: TextStyle(
+                color: Color(0xffe1e2eb),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            trailing: Icon(
+              rulesOpen ? Icons.expand_less : Icons.expand_more,
+              color: gold,
+            ),
+            onTap: () => setState(() => rulesOpen = !rulesOpen),
           ),
-          trailing: Icon(
-            rulesOpen ? Icons.expand_less : Icons.expand_more,
-            color: gold,
-          ),
-          onTap: () => setState(() => rulesOpen = !rulesOpen),
         ),
         if (rulesOpen)
           const Padding(

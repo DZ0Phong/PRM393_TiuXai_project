@@ -1,8 +1,14 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../detailed_road_screen.dart';
 import 'game_win_effect.dart';
 import 'tai_xiu_dice.dart';
+
+int validAllInStake(int balance, int remainingLimit) {
+  final capped = balance < remainingLimit ? balance : remainingLimit;
+  return capped < 1000 ? 0 : (capped ~/ 100) * 100;
+}
 
 /// Gold table UI for Tai Xiu. Chip selection and quick controls only prepare
 /// a stake locally; the server remains the authority for accepting bets.
@@ -114,12 +120,10 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
   int get _draftTotal => tai + xiu;
   int get _remainingRoundLimit =>
       (1000000 - widget.confirmedAmount - _draftTotal).clamp(0, 1000000);
-  int get _allInAmount {
-    final availableBalance = (widget.balance - _draftTotal).clamp(0, 1000000);
-    return availableBalance < _remainingRoundLimit
-        ? availableBalance
-        : _remainingRoundLimit;
-  }
+  int get _allInAmount => validAllInStake(
+    (widget.balance - _draftTotal).clamp(0, 1000000),
+    _remainingRoundLimit,
+  );
 
   String? get _activeSide => widget.confirmedAmount > 0
       ? widget.confirmedSide
@@ -135,7 +139,8 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
       return;
     }
     final amount = allInSelected ? _allInAmount : selectedChip;
-    if (amount <= 0 ||
+    if (amount < 1000 ||
+        amount % 100 != 0 ||
         amount > widget.balance - _draftTotal ||
         amount > _remainingRoundLimit) {
       _info('Mỗi phiên tối đa 1.000.000 xu và không vượt số dư.');
@@ -223,6 +228,10 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
 
   Future<void> _place(String side, int amount) async {
     if (!widget.enabled || sending || amount <= 0) return;
+    if (amount < 1000 || amount % 100 != 0) {
+      _info('Cược tối thiểu 1.000 xu và phải là bội số 100.');
+      return;
+    }
     if ((_activeSide != null && _activeSide != side) ||
         amount > widget.balance ||
         amount + widget.confirmedAmount > 1000000) {
@@ -244,7 +253,13 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
         }
       });
     } catch (error) {
-      if (mounted) _info('Chưa gửi được cược: $error');
+      if (mounted) {
+        _info(
+          error is FirebaseFunctionsException
+              ? (error.message ?? 'Máy chủ không nhận cược.')
+              : 'Chưa xác nhận cược; xem thông báo phía trên.',
+        );
+      }
     } finally {
       if (mounted) setState(() => sending = false);
     }

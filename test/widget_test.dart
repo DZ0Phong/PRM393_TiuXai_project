@@ -4,8 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tai_xiu_realtime/features/game/game_specs.dart';
 import 'package:tai_xiu_realtime/features/admin/admin_console.dart';
 import 'package:tai_xiu_realtime/main.dart';
+import 'package:tai_xiu_realtime/features/game/presentation/widgets/tai_xiu_betting_table.dart';
 
 void main() {
+  test('ALL IN làm tròn bội số 100 và không gửi cược dưới 1000', () {
+    expect(validAllInStake(28580, 1000000), 28500);
+    expect(validAllInStake(999, 1000000), 0);
+    expect(validAllInStake(1030, 990), 0);
+    expect(validAllInStake(1000000, 1000000), 1000000);
+  });
+
   test('Chỉ lỗi server dứt khoát mới xóa điều chỉnh chờ', () {
     expect(definitiveAdjustError('invalid-argument'), isTrue);
     expect(definitiveAdjustError('permission-denied'), isTrue);

@@ -77,13 +77,28 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
     if (oldWidget.roundId != widget.roundId) {
       bets.updateAll((_, _) => 0);
       allInSelected = false;
+      invalidCustomAmount = false;
+      customAmount.text = '$chip';
+      sending = false;
     }
   }
+
+  bool get canBet =>
+      widget.enabled &&
+      widget.status == 'open' &&
+      widget.secondsLeft > 0 &&
+      !sending;
+  bool get canSubmit =>
+      canBet &&
+      total > 0 &&
+      total <= widget.balance &&
+      total + confirmedTotal <= 1000000;
 
   void _notice(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
   void _addBet(String side) {
+    if (!canBet) return;
     if ((!allInSelected && invalidCustomAmount) ||
         (!allInSelected &&
             (chip < 1000 || chip > 1000000 || chip % 100 != 0))) {
@@ -110,7 +125,6 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
 
   @override
   Widget build(BuildContext context) {
-    final canBet = widget.enabled && !sending;
     final resultFaces = widget.result
         ?.map((face) => symbols.where((item) => item.$1 == face).toList())
         .where((matches) => matches.isNotEmpty)
@@ -513,7 +527,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: canBet && total > 0 ? _submit : null,
+                        onPressed: canSubmit ? _submit : null,
                         icon: const Icon(Icons.how_to_reg, size: 16),
                         label: const FittedBox(
                           fit: BoxFit.scaleDown,
@@ -545,30 +559,55 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
   }
 
   Future<void> _submit() async {
+    if (!canSubmit) return;
+    final roundId = widget.roundId;
+    final placeBet = widget.onPlaceBet;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
-    if (selected.isEmpty || sending) return;
+    String? attemptedSide;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
-        await widget.onPlaceBet(entry.key, entry.value);
-        if (mounted) setState(() => bets[entry.key] = 0);
+        if (!mounted ||
+            widget.roundId != roundId ||
+            !widget.enabled ||
+            widget.status != 'open' ||
+            widget.secondsLeft <= 0 ||
+            entry.value > widget.balance ||
+            entry.value + confirmedTotal > 1000000) {
+          break;
+        }
+        attemptedSide = entry.key;
+        await placeBet(entry.key, entry.value);
+        if (!mounted || widget.roundId != roundId) break;
+        setState(() => bets[entry.key] = 0);
+        attemptedSide = null;
       }
     } catch (error) {
-      if (mounted) {
-        _notice('Một số cửa chưa gửi được; cược đã nhận vẫn được giữ: $error');
+      if (mounted && widget.roundId == roundId) {
+        // A network failure can mean the server accepted the bet; never replay its draft.
+        if (attemptedSide != null) {
+          setState(() => bets[attemptedSide!] = 0);
+        }
+        _notice(
+          'Chưa xác nhận được cửa vừa gửi; kiểm tra cược trên máy chủ trước khi chọn lại: $error',
+        );
       }
     } finally {
-      if (mounted) setState(() => sending = false);
+      if (mounted && widget.roundId == roundId) {
+        setState(() => sending = false);
+      }
     }
   }
 
   Future<void> _refundAndReset() async {
-    if (!widget.enabled || sending) return;
+    if (!canBet) return;
+    final roundId = widget.roundId;
+    final refundBet = widget.onRefundBet;
     setState(() => sending = true);
     try {
       final hadConfirmedBet = confirmedTotal > 0;
-      if (hadConfirmedBet) await widget.onRefundBet();
-      if (!mounted) return;
+      if (hadConfirmedBet) await refundBet();
+      if (!mounted || widget.roundId != roundId) return;
       setState(() {
         bets.updateAll((_, _) => 0);
         allInSelected = false;
@@ -579,9 +618,13 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
             : 'Đã xóa lựa chọn cược chưa xác nhận.',
       );
     } catch (error) {
-      if (mounted) _notice('Chưa hoàn được cược: $error');
+      if (mounted && widget.roundId == roundId) {
+        _notice('Chưa hoàn được cược: $error');
+      }
     } finally {
-      if (mounted) setState(() => sending = false);
+      if (mounted && widget.roundId == roundId) {
+        setState(() => sending = false);
+      }
     }
   }
 }

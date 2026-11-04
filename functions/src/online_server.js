@@ -9,6 +9,25 @@ function reply(res, status, body) {
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
   res.end(JSON.stringify(body));
 }
+const INT64 = 'type.googleapis.com/google.protobuf.Int64Value';
+const UINT64 = 'type.googleapis.com/google.protobuf.UInt64Value';
+function decodeCallable(value, depth = 0) {
+  if (depth > 32) throw new HttpsError('invalid-argument', 'Dữ liệu quá sâu');
+  if (Array.isArray(value)) return value.map(item => decodeCallable(item, depth + 1));
+  if (value && typeof value === 'object') {
+    const type = value['@type'];
+    if (type === INT64 || type === UINT64) {
+      const pattern = type === INT64 ? /^-?(0|[1-9]\d*)$/ : /^(0|[1-9]\d*)$/;
+      if (Object.keys(value).length !== 2 || typeof value.value !== 'string' ||
+          !pattern.test(value.value) || !Number.isSafeInteger(Number(value.value)))
+        throw new HttpsError('invalid-argument', 'Số nguyên không hợp lệ');
+      return Number(value.value);
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+      [key, decodeCallable(item, depth + 1)]));
+  }
+  return value;
+}
 function createApiServer({handlers, verifyToken, maxBytes = 65536}) {
   const budgets = new Map();
   let lastMinute = -1;
@@ -42,7 +61,7 @@ function createApiServer({handlers, verifyToken, maxBytes = 65536}) {
       if (++budget.calls > 120 || (match[1] === 'getLeaderboard' && ++budget.leaderboard > 6))
         return reply(res, 429, {error: {status: 'RESOURCE_EXHAUSTED', message: 'Thử lại sau một phút'}});
       budgets.set(key, budget);
-      const data = await handlers[match[1]].run({data: payload.data, auth: {uid: auth.uid, token: auth}});
+      const data = await handlers[match[1]].run({data: decodeCallable(payload.data), auth: {uid: auth.uid, token: auth}});
       reply(res, 200, {data: data ?? null});
     } catch (error) {
       const code = error instanceof HttpsError ? error.code : 'internal';

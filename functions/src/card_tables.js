@@ -230,21 +230,31 @@ function register({db, call, admin}) {
     }),
     cardAction: call(async (req) => {
       const ref = tableRef(req.data?.tableId), secret = db.doc(`cardSecrets/${ref.id}`), uid = req.auth.uid;
+      const version = req.data?.version, input = req.data?.type, raiseAmount = req.data?.amount;
+      if (!Number.isSafeInteger(version) || version < 1) throw new HttpsError('invalid-argument', 'Phiên bản lượt không hợp lệ');
+      if (!['check', 'bet', 'call', 'raise', 'fold', 'all-in'].includes(input)) throw new HttpsError('invalid-argument', 'Hành động không hợp lệ');
+      if (input === 'raise' && (!Number.isSafeInteger(raiseAmount) || raiseAmount < 1))
+        throw new HttpsError('invalid-argument', 'Mức tố không hợp lệ');
+      if (input !== 'raise' && raiseAmount !== undefined)
+        throw new HttpsError('invalid-argument', 'Chỉ tố mới có mức cược');
+      const receipt = secret.collection('actions').doc(String(version));
       return db.runTransaction(async (tx) => {
-        const [table, hidden] = await Promise.all([tx.get(ref), tx.get(secret)]);
+        const [table, hidden, previous] = await Promise.all([tx.get(ref), tx.get(secret), tx.get(receipt)]);
+        if (previous.exists) {
+          const accepted = previous.data();
+          if (accepted.uid !== uid) throw new HttpsError('permission-denied', 'Chưa tới lượt của bạn');
+          if (accepted.type !== input || accepted.amount !== (input === 'raise' ? raiseAmount : null))
+            throw new HttpsError('already-exists', 'Lượt đã dùng với hành động khác');
+          return {status: accepted.status};
+        }
         if (!table.exists || table.data().status !== 'playing' || !hidden.exists) error('Bàn chưa chơi hoặc đã kết thúc');
         const data = table.data();
         if (data.game !== 'poker') error('Ba Cây tự lật bài sau khi đủ ghế');
-        if (!Number.isSafeInteger(req.data?.version) || req.data.version !== data.actionVersion) error('Lượt đã thay đổi; tải lại bàn');
+        if (version !== data.actionVersion) error('Lượt đã thay đổi; tải lại bàn');
         if (data.turnDeadline?.toMillis() <= Date.now()) error('Đã hết thời gian lượt');
         if (data.turnUid !== uid || !data.seats.some(s => s.uid === uid) || configuration(data, hidden.data()).botUids.includes(uid)) throw new HttpsError('permission-denied', 'Chưa tới lượt của bạn');
-        const input = req.data?.type;
-        if (!['check', 'bet', 'call', 'raise', 'fold', 'all-in'].includes(input)) throw new HttpsError('invalid-argument', 'Hành động không hợp lệ');
-        const raiseAmount = req.data?.amount;
-        if (input === 'raise' && (!Number.isSafeInteger(raiseAmount) || raiseAmount < data.stake))
+        if (input === 'raise' && raiseAmount < data.stake)
           throw new HttpsError('invalid-argument', 'Mức tố phải ít nhất bằng ante');
-        if (input !== 'raise' && raiseAmount !== undefined)
-          throw new HttpsError('invalid-argument', 'Chỉ tố mới có mức cược');
         let state = poker.act(hidden.data().state, uid,
           input === 'raise' ? {type: input, amount: raiseAmount} : {type: input}, data.stake);
         if (state.phase === 'showdown') state = poker.settle(state);
@@ -258,6 +268,7 @@ function register({db, call, admin}) {
         const publicData = view(state, data.seats);
         if (state.phase === 'settled') writeSettlement(tx, ref.id, state, wallets);
         tx.update(secret, {state}); tx.update(ref, {...publicData, actionVersion: data.actionVersion + 1});
+        tx.create(receipt, {uid, type: input, amount: input === 'raise' ? raiseAmount : null, status: publicData.status});
         audit(tx, uid, 'TABLE_ACTION', {tableId: ref.id, type: input, street: state.street, status: publicData.status});
         return {status: publicData.status};
       });

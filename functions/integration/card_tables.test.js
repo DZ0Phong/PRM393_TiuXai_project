@@ -250,11 +250,33 @@ test('card tables: private cards, 2–6 seats, bot, ledger, fixed-limit turns', 
     await a.call('startCardHand', {tableId: raceId});
     const turn = (await db.doc(`cardTables/${raceId}`).get()).data();
     const actor = turn.turnUid === a.user.uid ? a : b;
-    const duplicate = await Promise.allSettled([1, 2].map(() => actor.call('cardAction',
-      {tableId: raceId, type: 'check', version: turn.actionVersion})));
-    assert.equal(duplicate.filter(result => result.status === 'fulfilled').length, 1);
+    const action = {tableId: raceId, type: 'check', version: turn.actionVersion};
+    const duplicate = await Promise.all([actor.call('cardAction', action), actor.call('cardAction', action)]);
+    assert.deepEqual(duplicate[0], duplicate[1]);
     assert.equal((await db.doc(`cardTables/${raceId}`).get()).data().actionVersion, turn.actionVersion + 1);
+    await assert.rejects(actor.call('cardAction', {...action, type: 'fold'}), {code: 'functions/already-exists'});
+    const otherActor = actor === a ? b : a;
+    await assert.rejects(otherActor.call('cardAction', action));
     await boss.call('cancelCardTable', {tableId: raceId, reason: 'Hủy sau race'});
+    assert.deepEqual(await actor.call('cardAction', action), duplicate[0]);
     assert.equal(await previous(a.user.uid, b.user.uid), raceBalances);
+
+    const finishBalances = await previous(a.user.uid, b.user.uid);
+    const {tableId: finishId} = await a.call('createCardTable',
+      {game: 'poker', stake: 10, maxSeats: 2, requestId: 'card-finish-race-001'});
+    await b.call('joinCardTable', {tableId: finishId});
+    await a.call('startCardHand', {tableId: finishId});
+    const finishTurn = (await db.doc(`cardTables/${finishId}`).get()).data();
+    const folder = finishTurn.turnUid === a.user.uid ? a : b;
+    const finishAction = {tableId: finishId, type: 'fold', version: finishTurn.actionVersion};
+    const finishRace = await Promise.allSettled([
+      folder.call('cardAction', finishAction), boss.call('cancelCardTable', {tableId: finishId, reason: 'Hủy cùng lượt cuối'}),
+    ]);
+    assert.equal(finishRace.filter(item => item.status === 'fulfilled').length, 1);
+    const finishTable = (await db.doc(`cardTables/${finishId}`).get()).data();
+    assert.ok(['settled', 'cancelled'].includes(finishTable.status));
+    assert.equal((await db.doc(`users/${a.user.uid}/operations/${finishTable.status === 'settled' ? 'table_result' : 'table_refund'}_${finishId}`).get()).exists, true);
+    assert.equal(await previous(a.user.uid, b.user.uid), finishBalances);
+    if (finishTable.status === 'settled') assert.deepEqual(await folder.call('cardAction', finishAction), {status: 'settled'});
   } finally { await Promise.all(apps.map(deleteApp)); }
 });
