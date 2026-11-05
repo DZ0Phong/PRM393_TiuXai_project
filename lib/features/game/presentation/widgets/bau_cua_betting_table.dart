@@ -561,15 +561,14 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
   Future<void> _submit() async {
     if (!canSubmit) return;
     final roundId = widget.roundId;
-    final placeBet = widget.onPlaceBet;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
+    final placeBet = widget.onPlaceBet;
     String? attemptedSide;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
         if (!mounted ||
             widget.roundId != roundId ||
-            !widget.enabled ||
             widget.status != 'open' ||
             widget.secondsLeft <= 0 ||
             entry.value > widget.balance ||

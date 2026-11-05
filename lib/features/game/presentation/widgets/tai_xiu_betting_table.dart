@@ -68,6 +68,10 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
   bool shakeDice = false;
   bool manualPeek = false;
   bool lidOpen = false;
+  bool draggingLid = false;
+  Offset lidDragStart = Offset.zero;
+  Offset lidDragOffset = Offset.zero;
+  Offset lidOpenOffset = const Offset(0, -210);
   int previousTai = 0;
   int previousXiu = 0;
   final chatInput = TextEditingController();
@@ -103,12 +107,21 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
       allInSelected = false;
       lidOpen = false;
       manualPeek = false;
+      draggingLid = false;
+      lidDragStart = Offset.zero;
+      lidDragOffset = Offset.zero;
+      lidOpenOffset = const Offset(0, -210);
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
-      lidOpen = true;
+      // In manual mode, keep the bowl closed after settlement until the
+      // player drags it away. Automatic mode reveals the dice immediately.
+      lidOpen = !manualPeek;
+      lidOpenOffset = const Offset(0, -210);
+      lidDragOffset = lidOpen ? lidOpenOffset : Offset.zero;
     }
     if (oldWidget.status == 'settled' && widget.status != 'settled') {
       lidOpen = false;
+      lidDragOffset = Offset.zero;
     }
   }
 
@@ -273,6 +286,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
       status: widget.status,
       betAmount: widget.confirmedAmount,
       credit: widget.confirmedCredit,
+      revealAllowed: !manualPeek || lidOpen,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -766,6 +780,9 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                     () => setState(() {
                       manualPeek = false;
                       lidOpen = widget.status == 'settled';
+                      lidOpenOffset = const Offset(0, -210);
+                      lidDragOffset =
+                          lidOpen ? lidOpenOffset : Offset.zero;
                     }),
                   ),
                   _modeButton(
@@ -774,6 +791,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                     () => setState(() {
                       manualPeek = true;
                       lidOpen = false;
+                      lidDragOffset = Offset.zero;
                     }),
                   ),
                 ],
@@ -838,11 +856,62 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
               ),
             ),
             AnimatedSlide(
-              offset: lidOpen ? const Offset(0, -1.25) : Offset.zero,
-              duration: const Duration(milliseconds: 350),
+              offset: Offset(
+                lidDragOffset.dx / 162,
+                lidDragOffset.dy / 162,
+              ),
+              duration: draggingLid
+                  ? Duration.zero
+                  : const Duration(milliseconds: 350),
               child: GestureDetector(
-                onTap: manualPeek && widget.status == 'settled'
-                    ? () => setState(() => lidOpen = !lidOpen)
+                behavior: HitTestBehavior.opaque,
+                onPanStart:
+                    manualPeek && widget.status == 'settled' && !lidOpen
+                    ? (_) => setState(() {
+                        draggingLid = true;
+                        lidDragStart = Offset.zero;
+                        lidDragOffset = lidDragStart;
+                      })
+                    : null,
+                onPanUpdate:
+                    manualPeek && widget.status == 'settled' && !lidOpen
+                    ? (details) => setState(() {
+                        final next = lidDragOffset + details.delta;
+                        final distance = next.distance;
+                        lidDragOffset = distance > 210
+                            ? Offset(
+                                next.dx / distance * 210,
+                                next.dy / distance * 210,
+                              )
+                            : next;
+                      })
+                    : null,
+                onPanEnd:
+                    manualPeek && widget.status == 'settled' && !lidOpen
+                    ? (_) {
+                        final movement = lidDragOffset - lidDragStart;
+                        final distance = movement.distance;
+                        setState(() {
+                          draggingLid = false;
+                          if (distance >= 150) {
+                            lidOpen = true;
+                            lidOpenOffset = Offset(
+                              movement.dx / distance * 210,
+                              movement.dy / distance * 210,
+                            );
+                            lidDragOffset = lidOpenOffset;
+                          } else {
+                            lidDragOffset = Offset.zero;
+                          }
+                        });
+                      }
+                    : null,
+                onPanCancel:
+                    manualPeek && widget.status == 'settled' && !lidOpen
+                    ? () => setState(() {
+                        draggingLid = false;
+                        lidDragOffset = Offset.zero;
+                      })
                     : null,
                 child: Container(
                   width: 162,
@@ -883,7 +952,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                         ),
                       ),
                       Text(
-                        manualPeek ? 'Chạm để nặn bát' : 'Mở tự động',
+                        manualPeek ? 'Kéo bát ra để mở' : 'Mở tự động',
                         style: const TextStyle(
                           color: Color(0xff472a00),
                           fontSize: 9,
@@ -897,26 +966,27 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
           ],
         ),
         const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: const Color(0xee272a31),
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Text(
-            _resultSummary,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: widget.status == 'settled'
-                  ? const Color(0xffffb3ad)
-                  : const Color(0xffd8c3ad),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+        if (!manualPeek || lidOpen)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xee272a31),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Text(
+              _resultSummary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: widget.status == 'settled'
+                    ? const Color(0xffffb3ad)
+                    : const Color(0xffd8c3ad),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
       ],
     ),
   );
