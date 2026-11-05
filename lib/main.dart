@@ -1353,17 +1353,8 @@ class _RoundScreenState extends State<RoundScreen> {
                                             }
                                             return XocXocBettingTable(
                                               roundId: id,
-                                              onBackHome: () => Navigator.of(
-                                                context,
-                                              ).maybePop(),
-                                              onRefundBet: (side) =>
-                                                  _beginRoundMutation(
-                                                    'refundMyBet',
-                                                    {
-                                                      'roundId': id,
-                                                      'side': side,
-                                                    },
-                                                  ),
+                                              mode:
+                                                  '${round['mode'] ?? 'random'}',
                                               status: status,
                                               secondsLeft: secondsLeft,
                                               balance: balance is int
