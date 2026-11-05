@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/currency_format.dart';
+
 class PokerFeltTable extends StatelessWidget {
   final List<Map> seats;
   final Object? board;
@@ -76,7 +78,7 @@ class PokerFeltTable extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${seat['stack'] ?? '—'} TX',
+                      '${seat['stack'] is num ? formatCurrencyAmount((seat['stack'] as num).toInt()) : '—'} VNĐ',
                       style: const TextStyle(
                         color: Color(0xffffc174),
                         fontSize: 10,

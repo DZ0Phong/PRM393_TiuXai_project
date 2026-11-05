@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/currency_format.dart';
 import '../../detailed_road_screen.dart';
 import 'game_win_effect.dart';
 import 'tai_xiu_dice.dart';
@@ -132,10 +133,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
     }
   }
 
-  String format(int value) => value.toString().replaceAllMapped(
-    RegExp(r'(?=(\d{3})+(?!\d))'),
-    (_) => '.',
-  );
+  String format(int value) => formatCurrencyAmount(value);
 
   int get _draftTotal => tai + xiu;
   int get _remainingRoundLimit =>
@@ -167,7 +165,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
         amount % 100 != 0 ||
         amount > widget.balance - _draftTotal ||
         amount > _remainingRoundLimit) {
-      _info('Mỗi phiên tối đa 1.000.000 xu và không vượt số dư.');
+      _info('Mỗi phiên tối đa 1.000.000 VNĐ và không vượt số dư.');
       return;
     }
     setState(() {
@@ -219,7 +217,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
     final doubled = current * 2;
     if (doubled > widget.balance ||
         doubled > 1000000 - widget.confirmedAmount) {
-      _info('Gấp đôi sẽ vượt số dư hoặc giới hạn 1.000.000 xu/phiên.');
+      _info('Gấp đôi sẽ vượt số dư hoặc giới hạn 1.000.000 VNĐ/phiên.');
       return;
     }
     setState(() {
@@ -253,7 +251,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
   Future<void> _place(String side, int amount) async {
     if (!widget.enabled || sending || amount <= 0) return;
     if (amount < 1000 || amount % 100 != 0) {
-      _info('Cược tối thiểu 1.000 xu và phải là bội số 100.');
+      _info('Cược tối thiểu 1.000 VNĐ và phải là bội số 100.');
       return;
     }
     if ((_activeSide != null && _activeSide != side) ||
@@ -378,7 +376,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
               _roundAction(
                 Icons.menu,
                 'Tùy chọn',
-                () => _info('Bàn cược xu ảo.'),
+                () => _info('Bàn cược điểm mô phỏng.'),
               ),
             ],
           ),
@@ -501,7 +499,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Số dư: ${format(widget.balance)} Xu ảo',
+                          'Số dư: ${format(widget.balance)} VNĐ',
                           style: const TextStyle(
                             color: Color(0xffffc174),
                             fontWeight: FontWeight.w600,
@@ -575,7 +573,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                     ),
                   ),
                   ChoiceChip(
-                    label: Text('ALL IN • ${format(_allInAmount)}'),
+                    label: Text('ALL IN • ${format(_allInAmount)} VNĐ'),
                     selected: allInSelected,
                     onSelected: active && _allInAmount > 0
                         ? (_) => setState(() => allInSelected = true)
@@ -1094,7 +1092,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Bạn cược: ${format(amount)} xu',
+                  'Bạn cược: ${format(amount)} VNĐ',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -1105,7 +1103,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                 ),
                 if (refunded > 0)
                   Text(
-                    'Hoàn cân cửa: ${format(refunded)} xu',
+                    'Hoàn cân cửa: ${format(refunded)} VNĐ',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1115,7 +1113,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                     ),
                   ),
                 Text(
-                  'Tổng: ${format(totalBet)} • $players người',
+                  'Tổng: ${format(totalBet)} VNĐ • $players người',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

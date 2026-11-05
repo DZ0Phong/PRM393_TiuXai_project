@@ -50,22 +50,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   int get _strength =>
       [_lengthOk, _upperOk, _numberOk, _specialOk].where((v) => v).length;
 
-  Future<void> _forgotPassword() async {
-    final email = widget.user.email;
-    if (email == null || email.isEmpty) {
-      _notice('Tài khoản này không có email khôi phục.');
-      return;
-    }
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _notice('Đã gửi liên kết đặt lại mật khẩu đến $email.');
-    } on FirebaseAuthException catch (e) {
-      _notice(
-        e.message ?? 'Không gửi được email đặt lại mật khẩu (${e.code}).',
-      );
-    }
-  }
-
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) return;
     if (_strength != 4) {
@@ -173,17 +157,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         onToggle: () =>
                             setState(() => _showCurrent = !_showCurrent),
                         icon: Icons.key,
-                        trailing: TextButton(
-                          onPressed: _forgotPassword,
-                          child: const Text(
-                            'Quên mật khẩu?',
-                            style: TextStyle(
-                              color: _gold,
-                              decoration: TextDecoration.underline,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 16),
                       _passwordField(

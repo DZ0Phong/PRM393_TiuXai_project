@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart' hide Text;
 
 import '../../core/app_text.dart';
+import '../../core/currency_format.dart';
 import 'package:flutter/services.dart';
 
 import 'change_password_screen.dart';
@@ -14,7 +15,6 @@ import 'about_app_screen.dart';
 import 'app_settings_screen.dart';
 import 'terms_of_use_screen.dart';
 import 'privacy_policy_screen.dart';
-import '../auth/otp_verification_screen.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import 'point_activity_screen.dart';
 
@@ -126,7 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Icon(Icons.leaderboard, color: Color(0xffffc174), size: 22),
                     SizedBox(width: 8),
                     Text(
-                      'Bảng Xếp Hạng Đại Gia Xu Ảo',
+                      'Bảng Xếp Hạng Đại Gia VNĐ',
                       style: TextStyle(
                         color: Color(0xffffc174),
                         fontSize: 18,
@@ -219,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '${row['balance'] ?? '—'} xu',
+                                    '${row['balance'] is num ? formatCurrencyAmount((row['balance'] as num).toInt()) : '—'} VNĐ',
                                     style: const TextStyle(
                                       color: Color(0xffffc174),
                                       fontWeight: FontWeight.bold,
@@ -299,6 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     builder: (context, userSnap) {
                       final userData = userSnap.data?.data();
                       final balance = userData?['balance'] ?? 0;
+                      final nickname = userData?['nickname'];
                       final isBlocked = userData?['blocked'] == true;
                       final preferences = userData?['preferences'];
                       final hideBalance =
@@ -328,7 +329,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 children: [
                                   // Profile Hero Card
-                                  _buildProfileHeroCard(shortUid, isBlocked),
+                                  _buildProfileHeroCard(
+                                    shortUid,
+                                    isBlocked,
+                                    nickname: nickname is String
+                                        ? nickname
+                                        : null,
+                                  ),
                                   const SizedBox(height: 14),
 
                                   // VIP Wallet Card (Thẻ Số Dư Hoàng Gia)
@@ -344,10 +351,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                                   // Performance Bento (Chiến tích Tài Xỉu)
                                   _buildPerformanceBento(ops),
-                                  const SizedBox(height: 14),
-
-                                  // Lịch Sử Biến Động Ví Thực Tế (Wallet Ledger)
-                                  _buildOperationsLedger(ops),
                                   const SizedBox(height: 14),
 
                                   // VIP Privilege Showcase Banner
@@ -428,7 +431,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileHeroCard(String shortUid, bool isBlocked) {
+  Widget _buildProfileHeroCard(
+    String shortUid,
+    bool isBlocked, {
+    String? nickname,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xff1d2026),
@@ -486,42 +493,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       size: 40,
                     ),
                   ),
-                  Positioned(
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xfff59e0b), Color(0xffffc174)],
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            widget.isAdmin
-                                ? Icons.admin_panel_settings
-                                : Icons.workspace_premium,
-                            color: const Color(0xff472a00),
-                            size: 11,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            widget.isAdmin ? 'ADMIN' : 'VIP 7',
-                            style: const TextStyle(
-                              color: Color(0xff472a00),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(width: 14),
@@ -535,8 +506,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            widget.user.email?.split('@').first.toUpperCase() ??
-                                'ĐẠI GIA MACAU',
+                            (nickname?.trim().isNotEmpty == true
+                                    ? nickname!.trim()
+                                    : widget.user.email?.split('@').first ??
+                                          'ĐẠI GIA MACAU')
+                                .toUpperCase(),
                             style: const TextStyle(
                               color: Color(0xffffc174),
                               fontSize: 16,
@@ -647,58 +621,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // VIP Progress Bar
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xff272a31).withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Row(
-                      children: [
-                        Icon(Icons.stars, color: Color(0xffffc174), size: 14),
-                        SizedBox(width: 4),
-                        Text(
-                          'Tiến độ lên VIP 8 (Hoàng Kim Vương)',
-                          style: TextStyle(
-                            color: Color(0xffd8c3ad),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '82.500 / 100.000 EXP',
-                      style: TextStyle(
-                        color: Color(0xffffc174),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: 0.825,
-                    minHeight: 6,
-                    backgroundColor: const Color(0xff0b0e14),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xffffc174),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -726,7 +648,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Column(
@@ -756,7 +677,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Text(
                         !forceHidden && _isBalanceVisible
-                            ? '$balance'
+                            ? formatCurrencyAmount(balance)
                             : '••••••••••••',
                         style: const TextStyle(
                           color: Color(0xffffc174),
@@ -767,7 +688,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(width: 6),
                       const Text(
-                        'Xu Ảo',
+                        'VNĐ',
                         style: TextStyle(
                           color: Color(0xffffddb8),
                           fontSize: 13,
@@ -790,49 +711,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                     ],
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(
-                        Icons.military_tech,
-                        color: Color(0xff56e5a9),
-                        size: 14,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'VIP POINT',
-                        style: TextStyle(
-                          color: Color(0xffa08e7a),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xff0b0e14),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '14.250 pts',
-                      style: TextStyle(
-                        color: Color(0xff56e5a9),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -876,7 +754,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       Text(
-                        '500.000 Xu Ảo Khóa',
+                        '500.000 VNĐ Khóa',
                         style: TextStyle(
                           color: Color(0xffe1e2eb),
                           fontSize: 13,
@@ -897,7 +775,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   onPressed: () => _showInfoDialog(
                     'Két Sắt Hoàng Gia',
-                    'Tính năng gửi bảo lưu xu ảo an toàn khi không tham gia cược.',
+                    'Tính năng bảo lưu điểm mô phỏng khi không tham gia cược.',
                   ),
                   child: Row(
                     children: const [
@@ -936,11 +814,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   onPressed: () => _showInfoDialog(
                     'Nhận Điểm Tân Thủ',
-                    'Tài khoản mới tự động nhận 10.000 xu ảo. Nếu hết điểm, hãy liên hệ Admin hoặc thực hiện nhiệm vụ.',
+                    'Tài khoản mới tự động nhận 10.000 VNĐ mô phỏng. Nếu hết điểm, hãy liên hệ Admin hoặc thực hiện nhiệm vụ.',
                   ),
                   icon: const Icon(Icons.add_circle, size: 18),
                   label: const Text(
-                    'Nhận Xu Tân Thủ',
+                    'Nhận VNĐ Tân Thủ',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -957,8 +835,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   onPressed: () => _showInfoDialog(
-                    'Rút Xu / Đổi Thưởng',
-                    'Dự án PRM393 tuân thủ quy tắc giáo dục: Toàn bộ điểm số là xu ảo mô phỏng, không hỗ trợ nạp/rút tiền thật dưới mọi hình thức.',
+                    'Nạp / Rút VNĐ',
+                    'Dự án PRM393 phục vụ học tập: số dư VNĐ chỉ là điểm mô phỏng, không hỗ trợ nạp/rút tiền thật dưới mọi hình thức.',
                   ),
                   icon: const Icon(Icons.payments, size: 18),
                   label: const Text(
@@ -982,14 +860,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           iconBg: const Color(0xff410004),
           iconColor: const Color(0xffffb3ad),
           label: 'Lịch Sử Cược',
-          onTap: () {
-            // Cuộn xuống phần operations hoặc mở chi tiết
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Xem danh sách biến động ví & cược bên dưới.'),
-              ),
-            );
-          },
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PointActivityScreen(userId: widget.user.uid),
+            ),
+          ),
         ),
         _buildShortcutItem(
           icon: Icons.lock,
@@ -1012,11 +887,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: Icons.assignment_turned_in,
           iconBg: const Color(0xff32353c),
           iconColor: const Color(0xffffc174),
-          label: 'Nhiệm Vụ VIP',
+          label: 'Nhiệm Vụ',
           badge: true,
           onTap: () => _showInfoDialog(
             'Nhiệm Vụ Tân Thủ',
-            '• Đăng nhập hàng ngày: +1.000 Xu\n• Chơi 5 ván Tài Xỉu: +2.000 Xu\n• Tham gia bàn Poker: +3.000 Xu',
+            '• Đăng nhập hàng ngày: +1.000 VNĐ\n• Chơi 5 ván Tài Xỉu: +2.000 VNĐ\n• Tham gia bàn Poker: +3.000 VNĐ',
           ),
         ),
       ],
@@ -1322,7 +1197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     Text(
-                      maxWin > 0 ? '$maxWin Xu' : '850.000 Xu',
+                      '${formatCurrencyAmount(maxWin > 0 ? maxWin : 850000)} VNĐ',
                       style: const TextStyle(
                         color: Color(0xffffc174),
                         fontSize: 16,
@@ -1345,176 +1220,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
-  }
-
-  Widget _buildOperationsLedger(List<Map<String, dynamic>> ops) {
-    return Material(
-      color: const Color(0xff1d2026),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PointActivityScreen(userId: widget.user.uid),
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x1affffff)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.receipt_long,
-                    color: Color(0xffffc174),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 7),
-                  const Expanded(
-                    child: Text(
-                      'Biến động số dư gần nhất',
-                      style: TextStyle(
-                        color: Color(0xffe1e2eb),
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${ops.length} bản ghi',
-                    style: const TextStyle(
-                      color: Color(0xffa08e7a),
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right, color: Color(0xffa08e7a)),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Hoạt động điểm của tôi · Chạm để xem sổ điểm đầy đủ',
-                style: TextStyle(color: Color(0xffa08e7a), fontSize: 11),
-              ),
-              const SizedBox(height: 10),
-              if (ops.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: Text(
-                      'Chưa có giao dịch nào được ghi nhận.',
-                      style: TextStyle(color: Color(0xffa08e7a), fontSize: 12),
-                    ),
-                  ),
-                )
-              else
-                ...ops.take(8).map((op) {
-                  final kind = op['kind']?.toString() ?? 'Giao dịch';
-                  final delta = (op['delta'] as num?)?.toInt() ?? 0;
-                  final balanceAfter = op['balance'];
-                  final roundId = op['roundId'] ?? '';
-                  final isPositive = delta >= 0;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xff272a31).withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isPositive
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          color: isPositive
-                              ? const Color(0xff56e5a9)
-                              : const Color(0xffffb4ab),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _formatKind(kind),
-                                style: const TextStyle(
-                                  color: Color(0xffe1e2eb),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (roundId.toString().isNotEmpty)
-                                Text(
-                                  'Phiên: $roundId',
-                                  style: const TextStyle(
-                                    color: Color(0xffa08e7a),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${isPositive ? '+' : ''}$delta xu',
-                              style: TextStyle(
-                                color: isPositive
-                                    ? const Color(0xff56e5a9)
-                                    : const Color(0xffffb4ab),
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Dư: ${balanceAfter ?? '—'} xu',
-                              style: const TextStyle(
-                                color: Color(0xffa08e7a),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatKind(String kind) {
-    switch (kind) {
-      case 'welcome':
-        return 'Quà Tân Thủ Khởi Nghiệp';
-      case 'bet':
-        return 'Đặt cược phiên';
-      case 'result':
-        return 'Trả thưởng kết quả';
-      case 'admin':
-        return 'Điều chỉnh Quản trị';
-      case 'table_join':
-        return 'Mua vào bàn bài';
-      case 'table_leave':
-        return 'Hoàn trả rời bàn bài';
-      default:
-        return kind.toUpperCase();
-    }
   }
 
   Widget _buildPrivilegeBanner() {
@@ -1557,7 +1262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const Text(
-            'Tự động kết toán xu ảo mô phỏng vào 12:00 trưa hàng ngày.',
+            'Tự động kết toán điểm VNĐ mô phỏng vào 12:00 trưa hàng ngày.',
             style: TextStyle(color: Color(0xffa08e7a), fontSize: 11),
           ),
         ],
@@ -1597,17 +1302,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const Divider(height: 1, color: Color(0x1affffff)),
           _buildMenuRow(
-            icon: Icons.pin_outlined,
-            title: 'Xác Thực OTP (Demo)',
-            subtitle: 'Xác minh SMS bằng Firebase Auth',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => OtpVerificationScreen(user: widget.user),
-              ),
-            ),
-          ),
-          const Divider(height: 1, color: Color(0x1affffff)),
-          _buildMenuRow(
             icon: Icons.tune,
             title: 'Cài Đặt Tài Khoản',
             subtitle: 'Bảo mật, quyền riêng tư và tùy chọn demo',
@@ -1630,7 +1324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuRow(
             icon: Icons.policy_outlined,
             title: 'Điều Khoản Sử Dụng',
-            subtitle: 'Quy tắc và giới hạn của bản demo xu ảo',
+            subtitle: 'Quy tắc và giới hạn của bản demo điểm VNĐ',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const TermsOfUseScreen()),
             ),

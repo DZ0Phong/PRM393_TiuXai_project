@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../core/currency_format.dart';
 import '../game_win_effect.dart';
 
 /// Xóc Xóc play screen. Bets and outcomes remain server-authoritative.
@@ -73,10 +74,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     revealed = widget.status == 'settled';
   }
 
-  String format(int value) => value.toString().replaceAllMapped(
-    RegExp(r'(?=(\d{3})+(?!\d))'),
-    (_) => '.',
-  );
+  String format(int value) => formatCurrencyAmount(value);
 
   @override
   void didUpdateWidget(covariant XocXocBettingTable oldWidget) {
@@ -102,7 +100,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       _notice(
         next > widget.balance
             ? 'Số dư không đủ cho mức cược này.'
-            : 'Tổng cược tối đa mỗi phiên là 1.000.000 điểm.',
+            : 'Tổng cược tối đa mỗi phiên là 1.000.000 VNĐ.',
       );
       return;
     }
@@ -205,7 +203,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
         const Icon(Icons.toll, color: gold, size: 18),
         const SizedBox(width: 4),
         Text(
-          '${format(widget.balance)} P',
+          '${format(widget.balance)} VNĐ',
           style: const TextStyle(
             color: Color(0xffffddb8),
             fontWeight: FontWeight.bold,
@@ -306,7 +304,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
             const SizedBox(width: 7),
             const Expanded(
               child: Text(
-                'Số dư điểm ảo:',
+                'Số dư VNĐ:',
                 style: TextStyle(color: Color(0xffd8c3ad), fontSize: 11),
               ),
             ),
@@ -320,7 +318,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
             ),
             const SizedBox(width: 4),
             const Text(
-              'ĐIỂM',
+              'VNĐ',
               style: TextStyle(
                 color: gold,
                 fontSize: 9,
@@ -374,24 +372,24 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               child: Center(
                 child: revealed && result != null && result.length == 4
                     ? Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 5,
-                        runSpacing: 4,
-                        children: [for (final bit in result) _coin(bit == 1)],
-                      )
+                  alignment: WrapAlignment.center,
+                  spacing: 5,
+                  runSpacing: 4,
+                  children: [for (final bit in result) _coin(bit == 1)],
+                )
                     : const Icon(
-                        Icons.blur_on,
-                        color: Color(0xffffddb8),
-                        size: 42,
-                      ),
+                  Icons.blur_on,
+                  color: Color(0xffffddb8),
+                  size: 42,
+                ),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               revealed
                   ? (result == null
-                        ? 'Chưa có kết quả từ máy chủ.'
-                        : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
+                  ? 'Chưa có kết quả từ máy chủ.'
+                  : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
                   : open
                   ? 'Bát đang úp • Đặt cửa tự do'
                   : 'ĐANG LẮC • Cược đã khóa',
@@ -541,7 +539,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
               const SizedBox(height: 3),
               Text(
-                'Cược: ${format(amount)} xu',
+                'Cược: ${format(amount)} VNĐ',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -578,7 +576,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
             ),
             Text(
-              '${format(selectedChip)} ĐIỂM',
+              '${format(selectedChip)} VNĐ',
               style: const TextStyle(
                 color: Color(0xffffddb8),
                 fontWeight: FontWeight.bold,
@@ -598,9 +596,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                 selected: chip == selectedChip,
                 onSelected: canBet
                     ? (_) => setState(() {
-                        selectedChip = chip;
-                        allInSelected = false;
-                      })
+                  selectedChip = chip;
+                  allInSelected = false;
+                })
                     : null,
                 selectedColor: gold,
                 backgroundColor: const Color(0xff32353c),
@@ -616,7 +614,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           ],
         ),
         ChoiceChip(
-          label: Text('ALL IN • ${format(allInAmount)}'),
+          label: Text('ALL IN • ${format(allInAmount)} VNĐ'),
           selected: allInSelected,
           onSelected: canBet && allInAmount > 0
               ? (_) => setState(() => allInSelected = true)
@@ -645,7 +643,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     onPressed: canBet && total > 0 ? _submit : null,
     icon: const Icon(Icons.verified_outlined),
     label: Text(
-      sending ? 'ĐANG GỬI...' : 'XÁC NHẬN CƯỢC • ${format(total)} XU',
+      sending ? 'ĐANG GỬI...' : 'XÁC NHẬN CƯỢC • ${format(total)} VNĐ',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     ),
@@ -682,7 +680,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: Text(
-              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 điểm; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả ngẫu nhiên do máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
+              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 VNĐ; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả ngẫu nhiên do máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
               style: TextStyle(
                 color: Color(0xffd8c3ad),
                 height: 1.45,
@@ -800,9 +798,9 @@ class _XocXocRoad extends StatelessWidget {
   );
 
   Widget _roadCell(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    bool newest,
-  ) {
+      QueryDocumentSnapshot<Map<String, dynamic>> doc,
+      bool newest,
+      ) {
     final row = doc.data();
     final side = (row['outcome'] as Map?)?['side']?.toString();
     return Tooltip(

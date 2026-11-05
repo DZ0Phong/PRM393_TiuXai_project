@@ -308,7 +308,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                   Icon(Icons.verified_outlined, color: _termsGold, size: 14),
                   SizedBox(width: 5),
                   Text(
-                    'DỰ ÁN PRM393 • XU ẢO',
+                    'DỰ ÁN PRM393 • VNĐ MÔ PHỎNG',
                     style: TextStyle(
                       color: _termsGold,
                       fontSize: 9,
@@ -389,7 +389,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                     Icon(Icons.info_outline, color: _termsGold, size: 18),
                     SizedBox(width: 6),
                     Text(
-                      'MINH BẠCH • MÔ PHỎNG • XU ẢO',
+                      'MINH BẠCH • MÔ PHỎNG • VNĐ',
                       style: TextStyle(
                         color: _termsGold,
                         fontSize: 9,
@@ -563,7 +563,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                     children: [
                       TextSpan(text: 'Tôi xác nhận đã đọc và hiểu đây là '),
                       TextSpan(
-                        text: 'ứng dụng demo dùng xu ảo',
+                        text: 'ứng dụng demo dùng VNĐ mô phỏng',
                         style: TextStyle(
                           color: _termsGold,
                           fontWeight: FontWeight.w700,
@@ -640,7 +640,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
           runSpacing: 5,
           children: [
             _FooterTag(icon: Icons.school_outlined, label: 'PRM393'),
-            _FooterTag(icon: Icons.monetization_on_outlined, label: 'XU ẢO'),
+            _FooterTag(icon: Icons.monetization_on_outlined, label: 'VNĐ MÔ PHỎNG'),
             _FooterTag(icon: Icons.info_outline, label: 'KHÔNG GIAO DỊCH'),
           ],
         ),

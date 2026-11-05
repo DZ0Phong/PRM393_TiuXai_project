@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
 import '../game/game_specs.dart';
 import '../game/round_bets.dart';
 import 'round_outcome_picker.dart';
@@ -89,10 +90,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
     );
   }
 
-  String _number(int value) => value.toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
+  String _number(int value) => formatCurrencyAmount(value);
 
   Widget _surfaceCard({
     required Widget child,
@@ -433,7 +431,7 @@ class _AdminSessionControlsState extends State<AdminSessionControls> {
               'NGƯỜI CƯỢC LIVE',
               snapshot.hasError ? '—' : '$playerCount',
               _gold,
-              'Tổng: ${_number(stake)} TX',
+              'Tổng: ${_number(stake)} VNĐ',
             ),
           ),
         ],

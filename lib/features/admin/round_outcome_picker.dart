@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
 import '../game/game_specs.dart';
 import 'round_outcome_choices.dart';
 
@@ -73,7 +74,7 @@ class RoundOutcomePicker extends StatelessWidget {
                       : const Color(0xff444852),
                 ),
                 label: Text(
-                  '${side.$2}: ${counts[side.$1] ?? 0} người · ${totals[side.$1] ?? 0} điểm'
+                  '${side.$2}: ${counts[side.$1] ?? 0} người · ${formatCurrencyAmount((totals[side.$1] as num? ?? 0).toInt())} VNĐ'
                   '${highestStake > 0 && totals[side.$1] == highestStake ? ' ↑' : ''}',
                   style: const TextStyle(
                     color: Color(0xffffddb8),
@@ -85,7 +86,7 @@ class RoundOutcomePicker extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Tổng cược: $totalStake điểm. Chạm một kết quả hợp lệ để lưu một lần trước hạn cược.',
+          'Tổng cược: ${formatCurrencyAmount(totalStake)} VNĐ. Chạm một kết quả hợp lệ để lưu một lần trước hạn cược.',
           style: const TextStyle(color: Color(0xffd8c3ad), fontSize: 11),
         ),
         const SizedBox(height: 8),
@@ -113,7 +114,7 @@ class RoundOutcomePicker extends StatelessWidget {
                 ),
                 Text(
                   'Cửa thắng: ${choice.winningSides.map((side) => names[side]).join(' + ')}'
-                  ' · Trả dự kiến: ${choice.estimatedCredit} · Chênh cược − trả: ${totalStake - choice.estimatedCredit}',
+                  ' · Trả dự kiến: ${formatCurrencyAmount(choice.estimatedCredit)} VNĐ · Chênh cược − trả: ${formatCurrencyAmount(totalStake - choice.estimatedCredit)} VNĐ',
                   style: const TextStyle(fontSize: 10),
                 ),
                 if (uniqueLowest && choice.estimatedCredit == lowestCredit)
@@ -231,7 +232,7 @@ class _BauCuaOutcomeSelectorState extends State<_BauCuaOutcomeSelector> {
           const SizedBox(height: 4),
         ],
         Text(
-          'Kết quả: ${choice.label}${complete ? ' · Cửa thắng: ${winningSides.map((side) => faceNames[side]).join(', ')} · Trả dự kiến: $estimatedCredit điểm' : ''}',
+          'Kết quả: ${choice.label}${complete ? ' · Cửa thắng: ${winningSides.map((side) => faceNames[side]).join(', ')} · Trả dự kiến: ${formatCurrencyAmount(estimatedCredit)} VNĐ' : ''}',
           style: const TextStyle(color: Color(0xffd8c3ad), fontSize: 10),
         ),
         const SizedBox(height: 8),

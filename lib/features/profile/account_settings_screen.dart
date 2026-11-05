@@ -83,7 +83,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ],
         ),
         content: Text(
-          '$feature chưa được kết nối trong phiên bản demo. Ứng dụng chỉ sử dụng xu ảo, không xử lý ngân hàng hoặc tiền điện tử.',
+          '$feature chưa được kết nối trong phiên bản demo. Số dư VNĐ chỉ là điểm mô phỏng, không xử lý ngân hàng hoặc tiền điện tử.',
           style: const TextStyle(color: _settingsText, height: 1.45),
         ),
         actions: [
@@ -279,7 +279,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               ),
               const SizedBox(height: 3),
               Text(
-                'ID: ${_shortUid(widget.user.uid)} • Tài khoản xu ảo',
+                'ID: ${_shortUid(widget.user.uid)} • Tài khoản điểm mô phỏng VNĐ',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _settingsMuted, fontSize: 11),
@@ -371,7 +371,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: const Text(
-            'XU ẢO',
+            'VNĐ MÔ PHỎNG',
             style: TextStyle(
               color: _settingsMint,
               fontSize: 9,
@@ -396,7 +396,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         'Thẻ thanh toán',
         'Không liên kết',
         'Thanh toán không khả dụng',
-        'Chỉ chơi bằng xu ảo',
+        'Chỉ chơi bằng điểm VNĐ mô phỏng',
         isPrimary: false,
       ),
       const SizedBox(height: 9),
@@ -983,7 +983,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         SizedBox(width: 10),
         Expanded(
           child: Text(
-            'Tài Xỉu PRM393 chỉ dùng xu ảo để thực hành. Các công tắc cài đặt chỉ lưu tạm trên màn hình này; không cấu hình 2FA, sinh trắc học hay dịch vụ thanh toán.',
+            'Tài Xỉu PRM393 chỉ dùng điểm VNĐ mô phỏng để thực hành. Các công tắc cài đặt chỉ lưu tạm trên màn hình này; không cấu hình 2FA, sinh trắc học hay dịch vụ thanh toán.',
             style: TextStyle(color: _settingsMuted, fontSize: 11, height: 1.45),
           ),
         ),

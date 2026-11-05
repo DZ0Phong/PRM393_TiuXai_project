@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Text;
 
 import '../../core/app_text.dart';
 
+final appScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 class SignInScreen extends StatefulWidget {
   final bool initialRegisterTab;
@@ -30,6 +31,7 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _regTermsAccepted = true;
 
   bool _busy = false;
+  bool _resetBusy = false;
   String? _errorMessage;
 
   @override
@@ -106,15 +108,64 @@ class _SignInScreenState extends State<SignInScreen> {
         email: _formatEmail(accountText),
         password: passwordText,
       );
+      appScaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Đăng nhập thành công.')));
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = _getFriendlyAuthError(e.code, e.message));
+      const credentialErrors = {
+        'user-not-found',
+        'wrong-password',
+        'invalid-credential',
+        'invalid-login-credentials',
+        'invalid-email',
+      };
+      setState(
+        () => _errorMessage = credentialErrors.contains(e.code)
+            ? 'Email hoặc mật khẩu chưa chính xác.'
+            : _getFriendlyAuthError(e.code, e.message),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = 'Không thể kết nối máy chủ: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    if (_resetBusy) return;
+    final email = _loginAccountController.text.trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      _showAuthNotice('Nhập email đã đăng ký để nhận liên kết đặt lại mật khẩu.');
+      return;
+    }
+    if (email.toLowerCase().endsWith('@demo.test')) {
+      _showAuthNotice('Email demo không nhận được thư khôi phục mật khẩu.');
+      return;
+    }
+
+    setState(() => _resetBusy = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        _showAuthNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi đến $email.');
+      }
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        _showAuthNotice(error.message ?? 'Không gửi được email đặt lại mật khẩu (${error.code}).');
+      }
+    } catch (error) {
+      if (mounted) _showAuthNotice('Không thể gửi email đặt lại mật khẩu: $error');
+    } finally {
+      if (mounted) setState(() => _resetBusy = false);
+    }
+  }
+
+  void _showAuthNotice(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _submitRegister() async {
@@ -171,7 +222,7 @@ class _SignInScreenState extends State<SignInScreen> {
       case 'invalid-credential':
         return 'Sai mật khẩu hoặc tài khoản. Vui lòng kiểm tra lại.';
       case 'email-already-in-use':
-        return 'Tên tài khoản này đã có người sử dụng. Hãy chọn tên khác.';
+        return 'Email này đã có người sử dụng. Vui lòng dùng email khác.';
       case 'invalid-email':
         return 'Định dạng email hoặc tài khoản không hợp lệ.';
       case 'weak-password':
@@ -818,7 +869,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         child: GestureDetector(
                           onTap: () => _showInfoDialog(
                             'Điều Khoản Dịch Vụ',
-                            'Ứng dụng phục vụ đồ án môn học PRM393. Toàn bộ điểm số là xu ảo mô phỏng, không có nạp/rút tiền thật, không quy đổi hiện vật.',
+                            'Ứng dụng phục vụ đồ án môn học PRM393. VNĐ hiển thị chỉ là điểm mô phỏng, không có nạp/rút tiền thật, không quy đổi hiện vật.',
                           ),
                           child: const Text(
                             'Điều khoản dịch vụ',
@@ -1049,6 +1100,55 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _resetBusy ? null : _sendPasswordReset,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xffffc174),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                minimumSize: const Size(0, 32),
+              ),
+              child: Text(
+                _resetBusy ? 'Đang gửi...' : 'Quên mật khẩu?',
+                style: const TextStyle(
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xff690005).withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xffffb4ab)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xffffb4ab),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: Color(0xffffdad6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // CTA Nút Đăng Nhập

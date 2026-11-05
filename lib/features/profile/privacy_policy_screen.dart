@@ -268,7 +268,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   child: _PrivacyFact(
                     icon: Icons.monetization_on_outlined,
                     color: _privacyRed,
-                    title: 'Xu ảo',
+                    title: 'VNĐ mô phỏng',
                     subtitle: 'Không giao dịch',
                   ),
                 ),
@@ -364,7 +364,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           _detailTile(
             Icons.account_balance_wallet_outlined,
             'Dữ liệu demo:',
-            'Số dư xu ảo, hoạt động ví và dữ liệu phiên/cược cần thiết cho trò chơi.',
+            'Số dư VNĐ mô phỏng, hoạt động ví và dữ liệu phiên/cược cần thiết cho trò chơi.',
           ),
           _detailTile(
             Icons.badge_outlined,
@@ -386,7 +386,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           _purposeTile(
             Icons.casino_outlined,
             _privacyRed,
-            'Vận hành trò chơi xu ảo',
+            'Vận hành trò chơi VNĐ mô phỏng',
             'Ghi nhận cược mô phỏng, số dư và lịch sử phiên.',
           ),
           _purposeTile(

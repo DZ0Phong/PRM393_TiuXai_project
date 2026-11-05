@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
+
 class PointActivityScreen extends StatefulWidget {
   final String userId;
 
@@ -148,7 +150,7 @@ class _PointActivityScreenState extends State<PointActivityScreen> {
                                 ),
                               ),
                               Text(
-                                '${net >= 0 ? '+' : ''}${_formatPoints(net)} TX',
+                                '${net >= 0 ? '+' : ''}${_formatPoints(net)} VNĐ',
                                 style: TextStyle(
                                   color: net >= 0
                                       ? const Color(0xff73dfb0)
@@ -330,7 +332,7 @@ class _PointActivityScreenState extends State<PointActivityScreen> {
               ),
               const SizedBox(height: 5),
               Text(
-                '${_formatPoints(balance)} TX',
+                '${_formatPoints(balance)} VNĐ',
                 style: const TextStyle(
                   color: _gold,
                   fontSize: 22,
@@ -369,7 +371,7 @@ class _PointActivityScreenState extends State<PointActivityScreen> {
           ),
         ),
         Text(
-          '${_formatPoints(amount)} TX',
+          '${_formatPoints(amount)} VNĐ',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -457,7 +459,7 @@ class _PointActivityScreenState extends State<PointActivityScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${positive ? '+' : ''}${_formatPoints(operation.delta)} TX',
+                '${positive ? '+' : ''}${_formatPoints(operation.delta)} VNĐ',
                 style: TextStyle(
                   color: color,
                   fontSize: 12,
@@ -619,14 +621,7 @@ String _sideLabel(String side) => switch (side) {
 };
 
 String _formatPoints(int amount) {
-  final isNegative = amount < 0;
-  final digits = amount.abs().toString();
-  final out = StringBuffer(isNegative ? '-' : '');
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
-    out.write(digits[i]);
-  }
-  return out.toString();
+  return formatCurrencyAmount(amount);
 }
 
 String _formatDate(DateTime date) {

@@ -35,7 +35,7 @@ class AboutAppScreen extends StatelessWidget {
   Future<void> _share(BuildContext context) async {
     await Clipboard.setData(
       const ClipboardData(
-        text: 'Tài Xỉu PRM393 — ứng dụng demo trò chơi bằng xu ảo.',
+        text: 'Tài Xỉu PRM393 — ứng dụng demo trò chơi bằng VNĐ mô phỏng.',
       ),
     );
     if (context.mounted) {
@@ -231,7 +231,7 @@ class AboutAppScreen extends StatelessWidget {
                     Icon(Icons.circle, color: _aboutMint, size: 8),
                     SizedBox(width: 7),
                     Text(
-                      'PRM393 • XU ẢO',
+                      'PRM393 • VNĐ MÔ PHỎNG',
                       style: TextStyle(
                         color: _aboutMint,
                         fontSize: 10,
@@ -280,7 +280,7 @@ class AboutAppScreen extends StatelessWidget {
                 ),
               ),
               const Text(
-                'Trải nghiệm trò chơi mô phỏng bằng xu ảo',
+                'Trải nghiệm trò chơi mô phỏng bằng VNĐ',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xffffddb8),
@@ -345,7 +345,7 @@ class AboutAppScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Ứng dụng phục vụ bài thực hành PRM393 với các trò chơi mô phỏng. Tài khoản sử dụng điểm ảo; không có giao dịch tiền thật, nạp/rút, giải thưởng hoặc quy đổi.',
+          'Ứng dụng phục vụ bài thực hành PRM393 với các trò chơi mô phỏng. Số dư VNĐ chỉ là điểm mô phỏng; không có giao dịch tiền thật, nạp/rút, giải thưởng hoặc quy đổi.',
           style: TextStyle(color: _aboutText, fontSize: 13, height: 1.55),
         ),
       ],
@@ -372,7 +372,7 @@ class AboutAppScreen extends StatelessWidget {
         icon: Icons.casino,
         iconColor: _aboutGold,
         title: 'Nhiều trò chơi mô phỏng',
-        badge: 'XU ẢO',
+        badge: 'VNĐ MÔ PHỎNG',
         description:
             'Tài Xỉu, Bầu Cua, Xóc Xóc, Poker và Ba Cây trong cùng ứng dụng.',
       ),
@@ -576,7 +576,7 @@ class AboutAppScreen extends StatelessWidget {
       ),
       SizedBox(height: 4),
       Text(
-        'Chỉ dùng xu ảo • Không giao dịch tiền thật',
+        'VNĐ mô phỏng • Không giao dịch tiền thật',
         textAlign: TextAlign.center,
         style: TextStyle(color: Color(0xff786b60), fontSize: 9),
       ),

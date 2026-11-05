@@ -12,6 +12,7 @@ import 'core/backend_functions.dart';
 import 'core/pending_mutation.dart';
 import 'core/app_preferences.dart';
 import 'core/app_text.dart';
+import 'core/currency_format.dart';
 import 'features/auth/sign_in_screen.dart';
 import 'features/admin/admin_console.dart';
 import 'features/admin/round_outcome_picker.dart';
@@ -107,8 +108,9 @@ class GameApp extends StatelessWidget {
   const GameApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Phòng trò chơi • Xu ảo',
+    title: 'Phòng trò chơi • VNĐ mô phỏng',
     debugShowCheckedModeBanner: false,
+    scaffoldMessengerKey: appScaffoldMessengerKey,
     theme: ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
@@ -788,7 +790,7 @@ class _RoundScreenState extends State<RoundScreen> {
               widget.isAdmin
                   ? 'ADMIN • ${widget.game.title}'
                   : widget.game.id == 'tai_xiu'
-                  ? 'TÀI XỈU • XU ẢO'
+                  ? 'TÀI XỈU • VNĐ MÔ PHỎNG'
                   : widget.game.title,
             ),
             actions:
@@ -913,7 +915,7 @@ class _RoundScreenState extends State<RoundScreen> {
                 widget.game.id != 'bau_cua' &&
                 widget.game.id != 'xoc_xoc')
               const Text(
-                'Xu ảo, không tiền thật và không giải thưởng. Kết quả/số dư do máy chủ xác nhận.',
+                'VNĐ mô phỏng, không phải tiền thật và không có giải thưởng. Kết quả/số dư do máy chủ xác nhận.',
               ),
             if (busy) const LinearProgressIndicator(),
             if (message != null)
@@ -1399,7 +1401,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                 controller: amount,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
-                                  labelText: 'Số xu cược',
+                                  labelText: 'Số VNĐ cược',
                                   border: OutlineInputBorder(),
                                 ),
                               ),
@@ -1431,7 +1433,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                                       value <= 0) {
                                                     setState(
                                                       () => message =
-                                                          'Cược tối thiểu 1000 xu; bội số 100. Xóc Xóc: 1000/10000/50000/100000/1000000.',
+                                                          'Cược tối thiểu 1.000 VNĐ; bội số 100. Xóc Xóc: 1.000/10.000/50.000/100.000/1.000.000.',
                                                     );
                                                     return;
                                                   }
@@ -1474,7 +1476,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                   return Text(
                                     data == null
                                         ? 'Bạn chưa cược phiên này.'
-                                        : 'Cược của bạn: ${data['stakes']} • ${data['amount']} xu '
+                                        : 'Cược của bạn: ${data['stakes']} • ${formatCurrencyAmount((data['amount'] as num? ?? 0).toInt())} VNĐ '
                                               '• Ghi có: ${data['credit'] ?? 'chờ kết quả'}',
                                   );
                                 },

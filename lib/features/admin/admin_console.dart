@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
 import '../cards/presentation/screens/card_table_screen.dart';
 import '../game/detailed_road_screen.dart';
 import '../game/game_specs.dart';
@@ -557,10 +558,7 @@ class _AdminConsoleState extends State<AdminConsole> {
     ),
   );
 
-  String _formatCount(int value) => value.toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
+  String _formatCount(int value) => formatCurrencyAmount(value);
 
   Widget _bottomNavigationBar() => NavigationBar(
     height: 58,
@@ -674,7 +672,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                   ),
                   const SizedBox(width: 3),
                   const Text(
-                    'TX',
+                    'VNĐ',
                     style: TextStyle(
                       color: Color(0xfff59e0b),
                       fontSize: 8,
