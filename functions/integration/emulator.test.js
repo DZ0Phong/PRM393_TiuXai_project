@@ -236,18 +236,6 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     assert.equal((await p.call('lockRound', {roundId: balanceRound.roundId})).status, 'locked');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeBalanceRefund + 2000);
 
-    const xocCancelRound = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
-    await p.call('placeBet', {roundId: xocCancelRound.roundId, side: 'red4', amount: 3000, requestId: 'xoc-red4'});
-    await p.call('placeBet', {roundId: xocCancelRound.roundId, side: 'white3', amount: 2000, requestId: 'xoc-white3'});
-    const beforeCellCancel = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
-    await p.call('refundMyBet', {roundId: xocCancelRound.roundId, side: 'red4', requestId: 'xoc-cancel-red4'});
-    const xocAfterCellCancel = (await db.doc(`rounds/${xocCancelRound.roundId}`).get()).data();
-    const xocBetAfterCellCancel = (await db.doc(`rounds/${xocCancelRound.roundId}/bets/${p.user.uid}`).get()).data();
-    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeCellCancel + 3000);
-    assert.equal(xocAfterCellCancel.totals.red4, 0);
-    assert.equal(xocAfterCellCancel.totals.white3, 2000);
-    assert.deepEqual(xocBetAfterCellCancel.stakes, {white3: 2000});
-    assert.equal(xocBetAfterCellCancel.amount, 2000);
   } finally { await Promise.all(apps.map(deleteApp)); }
 });
 

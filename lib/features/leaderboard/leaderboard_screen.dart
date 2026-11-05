@@ -147,7 +147,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'HALL OF FAME · XU ẢO',
+                'HALL OF FAME · VNĐ MÔ PHỎNG',
                 style: TextStyle(color: _gold, fontWeight: FontWeight.bold, letterSpacing: 1),
               ),
               const SizedBox(height: 5),

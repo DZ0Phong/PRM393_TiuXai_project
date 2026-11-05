@@ -7,6 +7,7 @@ import '../game_win_effect.dart';
 /// Xóc Xóc play screen. Bets and outcomes remain server-authoritative.
 class XocXocBettingTable extends StatefulWidget {
   final String roundId;
+  final String mode;
   final String status;
   final int secondsLeft;
   final int balance;
@@ -14,13 +15,12 @@ class XocXocBettingTable extends StatefulWidget {
   final List<dynamic>? result;
   final int? confirmedCredit;
   final Map<String, int> confirmedBets;
-  final VoidCallback onBackHome;
-  final Future<void> Function(String side) onRefundBet;
   final Future<void> Function(String side, int amount) onPlaceBet;
 
   const XocXocBettingTable({
     super.key,
     required this.roundId,
+    required this.mode,
     required this.status,
     required this.secondsLeft,
     required this.balance,
@@ -28,8 +28,6 @@ class XocXocBettingTable extends StatefulWidget {
     required this.result,
     this.confirmedCredit,
     this.confirmedBets = const {},
-    required this.onBackHome,
-    required this.onRefundBet,
     required this.onPlaceBet,
   });
 
@@ -50,7 +48,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   ];
 
   final bets = <String, int>{for (final gate in gates) gate.$1: 0};
-  int? selectedChip;
+  int selectedChip = 10000;
   bool allInSelected = false;
   bool sending = false;
   bool revealed = false;
@@ -68,16 +66,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     return valid >= 1000 ? valid : 0;
   }
 
-  bool get canBet =>
-      widget.enabled &&
-      widget.status == 'open' &&
-      widget.secondsLeft > 0 &&
-      !sending;
-  bool get canSubmit =>
-      canBet &&
-      total > 0 &&
-      total <= widget.balance &&
-      total + confirmedTotal <= 1000000;
+  bool get canBet => widget.enabled && !sending;
 
   @override
   void initState() {
@@ -94,12 +83,6 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
-      selectedChip = null;
-      sending = false;
-    }
-    if (oldWidget.status == 'open' && widget.status != 'open') {
-      selectedChip = null;
-      allInSelected = false;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       revealed = true;
@@ -107,12 +90,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   }
 
   void _add(String side) {
-    if (!canBet) return;
-    final amount = allInSelected ? allInAmount : (selectedChip ?? 0);
-    if (amount == 0) {
-      _notice('Hãy chọn mệnh giá chip trước khi đặt cược.');
-      return;
-    }
+    final amount = allInSelected ? allInAmount : selectedChip;
     final next = total + amount;
     if (amount <= 0) {
       _notice('Số dư khả dụng không đủ để đặt cược.');
@@ -133,77 +111,25 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   }
 
   Future<void> _submit() async {
-    if (!canSubmit) return;
-    final roundId = widget.roundId;
-    final placeBet = widget.onPlaceBet;
+    if (!canBet || total == 0) return;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
-    String? attemptedSide;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
-        if (!mounted ||
-            widget.roundId != roundId ||
-            widget.status != 'open' ||
-            widget.secondsLeft <= 0 ||
-            entry.value > widget.balance ||
-            entry.value + confirmedTotal > 1000000) {
-          break;
-        }
-        attemptedSide = entry.key;
-        await placeBet(entry.key, entry.value);
-        if (!mounted || widget.roundId != roundId) break;
-        setState(() => bets[entry.key] = 0);
-        attemptedSide = null;
+        await widget.onPlaceBet(entry.key, entry.value);
+        if (mounted) setState(() => bets[entry.key] = 0);
       }
     } catch (error) {
-      if (mounted && widget.roundId == roundId) {
-        // A network failure can mean the server accepted the bet; never replay its draft.
-        if (attemptedSide != null) {
-          setState(() => bets[attemptedSide!] = 0);
-        }
-        _notice(
-          'Chưa xác nhận được cửa vừa gửi; kiểm tra cược trên máy chủ trước khi chọn lại: $error',
-        );
+      if (mounted) {
+        _notice('Một số cửa chưa gửi được. Cược đã nhận vẫn được giữ: $error');
       }
     } finally {
-      if (mounted && widget.roundId == roundId) {
-        setState(() => sending = false);
-      }
+      if (mounted) setState(() => sending = false);
     }
   }
 
   void _notice(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-
-  Future<void> _cancelGate(String side) async {
-    if (!canBet) return;
-    final roundId = widget.roundId;
-    final confirmedAmount = widget.confirmedBets[side] ?? 0;
-    final draftAmount = bets[side] ?? 0;
-    if (confirmedAmount <= 0 && draftAmount <= 0) return;
-    setState(() => sending = true);
-    try {
-      if (confirmedAmount > 0) await widget.onRefundBet(side);
-      if (!mounted || widget.roundId != roundId) return;
-      setState(() {
-        bets[side] = 0;
-        allInSelected = false;
-      });
-      _notice(
-        confirmedAmount > 0
-            ? 'Đã hủy riêng cửa cược này và hoàn ${format(confirmedAmount)} VNĐ.'
-            : 'Đã xóa cược nháp ở cửa này.',
-      );
-    } catch (error) {
-      if (mounted && widget.roundId == roundId) {
-        _notice('Chưa hủy được cược: $error');
-      }
-    } finally {
-      if (mounted && widget.roundId == roundId) {
-        setState(() => sending = false);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -228,20 +154,6 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           _chipSelector(),
           const SizedBox(height: 8),
           _confirmButton(),
-          if (canBet && total > 0)
-            TextButton.icon(
-              onPressed: sending
-                  ? null
-                  : () => setState(() {
-                      bets.updateAll((_, _) => 0);
-                      allInSelected = false;
-                    }),
-              icon: const Icon(Icons.undo, size: 18),
-              label: const Text('HỦY CÁC CỬA CHƯA XÁC NHẬN'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xff56e5a9),
-              ),
-            ),
           const SizedBox(height: 8),
           _road(),
           const SizedBox(height: 8),
@@ -262,12 +174,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     decoration: _panel(),
     child: Row(
       children: [
-        IconButton(
-          tooltip: 'Về sảnh chính',
-          onPressed: widget.onBackHome,
-          icon: const Icon(Icons.home_outlined, color: gold),
-          visualDensity: VisualDensity.compact,
-        ),
+        const Icon(Icons.casino, color: gold),
         const SizedBox(width: 8),
         const Expanded(
           child: Column(
@@ -350,7 +257,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            widget.status.toUpperCase(),
+            widget.status == 'open'
+                ? widget.mode.toUpperCase()
+                : '${widget.mode.toUpperCase()} • ${widget.status.toUpperCase()}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -463,24 +372,24 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               child: Center(
                 child: revealed && result != null && result.length == 4
                     ? Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 5,
-                        runSpacing: 4,
-                        children: [for (final bit in result) _coin(bit == 1)],
-                      )
+                  alignment: WrapAlignment.center,
+                  spacing: 5,
+                  runSpacing: 4,
+                  children: [for (final bit in result) _coin(bit == 1)],
+                )
                     : const Icon(
-                        Icons.blur_on,
-                        color: Color(0xffffddb8),
-                        size: 42,
-                      ),
+                  Icons.blur_on,
+                  color: Color(0xffffddb8),
+                  size: 42,
+                ),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               revealed
                   ? (result == null
-                        ? 'Chưa có kết quả từ máy chủ.'
-                        : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
+                  ? 'Chưa có kết quả từ máy chủ.'
+                  : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
                   : open
                   ? 'Bát đang úp • Đặt cửa tự do'
                   : 'ĐANG LẮC • Cược đã khóa',
@@ -639,28 +548,6 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                   fontSize: 10,
                 ),
               ),
-              if (selected)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: SizedBox(
-                    height: 24,
-                    child: TextButton.icon(
-                      onPressed: canBet && !sending
-                          ? () => _cancelGate(gate.$1)
-                          : null,
-                      icon: const Icon(Icons.close, size: 13),
-                      label: const Text('Hủy cược'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xffff8c82),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        visualDensity: VisualDensity.compact,
-                        textStyle: const TextStyle(fontSize: 9),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -689,11 +576,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
             ),
             Text(
-              allInSelected
-                  ? 'ALL IN'
-                  : selectedChip == null
-                  ? 'CHƯA CHỌN CHIP'
-                  : '${format(selectedChip!)} VNĐ',
+              '${format(selectedChip)} VNĐ',
               style: const TextStyle(
                 color: Color(0xffffddb8),
                 fontWeight: FontWeight.bold,
@@ -713,9 +596,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                 selected: chip == selectedChip,
                 onSelected: canBet
                     ? (_) => setState(() {
-                        selectedChip = chip;
-                        allInSelected = false;
-                      })
+                  selectedChip = chip;
+                  allInSelected = false;
+                })
                     : null,
                 selectedColor: gold,
                 backgroundColor: const Color(0xff32353c),
@@ -757,7 +640,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   };
 
   Widget _confirmButton() => FilledButton.icon(
-    onPressed: canSubmit ? _submit : null,
+    onPressed: canBet && total > 0 ? _submit : null,
     icon: const Icon(Icons.verified_outlined),
     label: Text(
       sending ? 'ĐANG GỬI...' : 'XÁC NHẬN CƯỢC • ${format(total)} VNĐ',
@@ -777,30 +660,27 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     decoration: _panel(),
     child: Column(
       children: [
-        Material(
-          type: MaterialType.transparency,
-          child: ListTile(
-            leading: const Icon(Icons.verified_user, color: gold),
-            title: const Text(
-              'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
-              style: TextStyle(
-                color: Color(0xffe1e2eb),
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
+        ListTile(
+          leading: const Icon(Icons.verified_user, color: gold),
+          title: const Text(
+            'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
+            style: TextStyle(
+              color: Color(0xffe1e2eb),
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
             ),
-            trailing: Icon(
-              rulesOpen ? Icons.expand_less : Icons.expand_more,
-              color: gold,
-            ),
-            onTap: () => setState(() => rulesOpen = !rulesOpen),
           ),
+          trailing: Icon(
+            rulesOpen ? Icons.expand_less : Icons.expand_more,
+            color: gold,
+          ),
+          onTap: () => setState(() => rulesOpen = !rulesOpen),
         ),
         if (rulesOpen)
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: Text(
-              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 VNĐ; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả được máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
+              '• Bốn đồng xu: Chẵn/Lẻ trả 1.98x; 3 mặt đỏ/trắng trả 3.94x; 4 mặt đỏ/trắng trả 14.7x.\n• Mỗi phiên đặt tối đa 1.000.000 VNĐ; chip theo mệnh giá có sẵn.\n• Tỷ lệ theo luật backend; kết quả ngẫu nhiên do máy chủ chốt sau khi khóa cược.\n• Bảng soi cầu chỉ hiển thị dữ liệu lịch sử, không dự đoán kết quả.',
               style: TextStyle(
                 color: Color(0xffd8c3ad),
                 height: 1.45,
@@ -918,9 +798,9 @@ class _XocXocRoad extends StatelessWidget {
   );
 
   Widget _roadCell(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    bool newest,
-  ) {
+      QueryDocumentSnapshot<Map<String, dynamic>> doc,
+      bool newest,
+      ) {
     final row = doc.data();
     final side = (row['outcome'] as Map?)?['side']?.toString();
     return Tooltip(

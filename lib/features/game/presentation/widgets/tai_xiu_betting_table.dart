@@ -1103,7 +1103,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                 ),
                 if (refunded > 0)
                   Text(
-                    'Hoàn cân cửa: ${format(refunded)} xu',
+                    'Hoàn cân cửa: ${format(refunded)} VNĐ',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

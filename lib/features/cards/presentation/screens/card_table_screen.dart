@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tai_xiu_realtime/core/currency_format.dart';
 
 import '../widgets/card_table_widgets.dart';
 import '../widgets/ba_cay/ba_cay_arena_view.dart';
@@ -255,7 +256,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
     if (_pendingCreate == null &&
         (stake == null || stake < 10 || stake > 100)) {
       setState(() {
-        _message = 'Nhập mức ante từ 10 đến 100 xu ảo.';
+        _message = 'Nhập mức ante từ 10 đến 100 VNĐ mô phỏng.';
         _messageIsError = true;
       });
       return;
@@ -471,7 +472,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   if (index > 1) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Mục này đang ở chế độ giao diện xu ảo.'),
+                        content: Text('Mục này đang ở chế độ giao diện VNĐ mô phỏng.'),
                       ),
                     );
                   }
@@ -526,7 +527,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                                     ),
                                   ),
                                   Text(
-                                    'Số dư ${balance ?? '—'} TX ảo',
+                                    'Số dư ${balance is num ? formatCurrencyAmount(balance.toInt()) : '—'} VNĐ',
                                     style: const TextStyle(
                                       color: Color(0xffffc174),
                                       fontSize: 13,
@@ -582,7 +583,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                                 ),
                               ),
                               Text(
-                                'Sảnh Poker TiuXai • xu ảo',
+                                'Sảnh Poker TiuXai • VNĐ mô phỏng',
                                 style: TextStyle(
                                   color: Color(0xffd8c3ad),
                                   fontSize: 11,
@@ -621,7 +622,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                     child: Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        'CHỈ XU ẢO • Điểm ảo không phải tiền thật, không nạp/rút '
+                        'CHỈ VNĐ MÔ PHỎNG • Điểm không phải tiền thật, không nạp/rút '
                         'và không có giải thưởng.',
                       ),
                     ),
@@ -683,7 +684,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                     ? (_) => setState(() {})
                     : null,
                 decoration: const InputDecoration(
-                  labelText: 'Ante (10–100 xu ảo)',
+                  labelText: 'Ante (10–100 VNĐ)',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -697,7 +698,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                       ),
                     ),
                     Text(
-                      '${int.tryParse(_stake.text) ?? 10} TX',
+                      '${formatCurrencyAmount(int.tryParse(_stake.text) ?? 10)} VNĐ',
                       style: const TextStyle(
                         color: Color(0xffffc174),
                         fontWeight: FontWeight.bold,
@@ -743,7 +744,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                         ),
                       ),
                       Text(
-                        '${(int.tryParse(_stake.text) ?? 10) * 10} TX',
+                        '${formatCurrencyAmount((int.tryParse(_stake.text) ?? 10) * 10)} VNĐ',
                         style: const TextStyle(
                           color: Color(0xffffc174),
                           fontWeight: FontWeight.bold,
@@ -818,7 +819,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                 ),
               if (_pendingCreate != null)
                 Text(
-                  'Yêu cầu chờ: ${_pendingCreate!['stake']} xu ảo • '
+                  'Yêu cầu chờ: ${_pendingCreate!['stake']} VNĐ • '
                   '${_pendingCreate!['maxSeats']} ghế. '
                   'Thử lại cùng requestId, không tạo yêu cầu mới.',
                 ),
@@ -898,7 +899,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   child: ListTile(
                     title: Text('Bàn ${doc.id}'),
                     subtitle: Text(
-                      '${doc.data()['stake'] ?? '—'} xu ảo • '
+                      '${doc.data()['stake'] is num ? formatCurrencyAmount((doc.data()['stake'] as num).toInt()) : '—'} VNĐ • '
                       '${cardSeats(doc.data()).length}/${doc.data()['maxSeats'] ?? '—'} ghế',
                     ),
                     onTap: _busy
@@ -922,7 +923,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   dense: true,
                   title: Text('Bàn ${doc.id}'),
                   subtitle: Text(
-                    'Thắng: ${cardWinners(doc.data()['winners'])} • ${doc.data()['stake'] ?? '—'} xu',
+                    'Thắng: ${cardWinners(doc.data()['winners'])} • ${doc.data()['stake'] is num ? formatCurrencyAmount((doc.data()['stake'] as num).toInt()) : '—'} VNĐ',
                   ),
                   onTap: () => setState(() => _openTable(doc.id)),
                 ),
@@ -993,12 +994,12 @@ class _CardTableScreenState extends State<CardTableScreen> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           Text(
-            'Trạng thái: $status • ${table['stake'] ?? '—'} xu ảo • '
+            'Trạng thái: $status • ${table['stake'] is num ? formatCurrencyAmount((table['stake'] as num).toInt()) : '—'} VNĐ • '
             '${seats.length}/$maxSeats ghế',
           ),
           if (playing)
             Text(
-              'Vòng: ${table['street'] ?? '—'} • Pot: ${table['pot'] ?? '—'} xu ảo',
+              'Vòng: ${table['street'] ?? '—'} • Pot: ${table['pot'] is num ? formatCurrencyAmount((table['pot'] as num).toInt()) : '—'} VNĐ',
             ),
           const SizedBox(height: 8),
           if (playing && widget.game == 'poker')
@@ -1021,7 +1022,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   '${seat['nickname'] ?? seat['uid'] ?? 'Ghế trống'}',
                 ),
                 subtitle: Text(
-                  '${seat['stack'] ?? '—'} xu ảo'
+                  '${seat['stack'] is num ? formatCurrencyAmount((seat['stack'] as num).toInt()) : '—'} VNĐ'
                   '${seat['uid'] == widget.uid ? ' • Bạn' : ''}'
                   '${seat['uid'] == table['turnUid'] && playing ? ' • Đến lượt' : ''}',
                 ),
@@ -1155,7 +1156,7 @@ class _CardTableScreenState extends State<CardTableScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tố thêm: $raiseValue TX',
+                      'Tố thêm: ${formatCurrencyAmount(raiseValue.toInt())} VNĐ',
                       style: const TextStyle(
                         color: Color(0xffffc174),
                         fontWeight: FontWeight.bold,
@@ -1243,10 +1244,10 @@ class _CardTableScreenState extends State<CardTableScreen> {
             const Divider(height: 32),
             Text('Kết quả', style: Theme.of(context).textTheme.titleMedium),
             Text('Người thắng: ${cardWinners(table['winners'])}'),
-            Text('Pot: ${table['pot'] ?? '—'} xu ảo'),
+            Text('Pot: ${table['pot'] is num ? formatCurrencyAmount((table['pot'] as num).toInt()) : '—'} VNĐ'),
             if (widget.game == 'ba_cay')
               Text(
-                'Chương: ${table['dealerUid'] ?? '—'} • phí: ${table['rake'] ?? 0} xu',
+                'Chương: ${table['dealerUid'] ?? '—'} • phí: ${table['rake'] is num ? formatCurrencyAmount((table['rake'] as num).toInt()) : '0'} VNĐ',
               ),
           ],
           if (status == 'cancelled')

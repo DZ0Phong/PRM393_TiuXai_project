@@ -371,7 +371,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: const Text(
-            'XU ẢO',
+            'VNĐ MÔ PHỎNG',
             style: TextStyle(
               color: _settingsMint,
               fontSize: 9,

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
 import 'game_specs.dart';
 
 class RoundBets extends StatefulWidget {
@@ -124,12 +125,12 @@ class _RoundBetsState extends State<RoundBets> {
             children: [
               ListTile(
                 title: Text(
-                  '${bets.length} người đang cược • Tổng $total điểm',
+                  '${bets.length} người đang cược • Tổng ${formatCurrencyAmount(total)} VNĐ',
                 ),
                 subtitle: Text(
                   widget.game.id == 'tai_xiu'
-                      ? 'Chênh Tài − Xỉu: ${totals['tai']! - totals['xiu']!} điểm'
-                      : 'Cửa cao nhất: ${leading.$2} • Chênh cao nhất − thấp nhất: $spread điểm',
+                      ? 'Chênh Tài − Xỉu: ${formatCurrencyAmount(totals['tai']! - totals['xiu']!)} VNĐ'
+                      : 'Cửa cao nhất: ${leading.$2} • Chênh cao nhất − thấp nhất: ${formatCurrencyAmount(spread)} VNĐ',
                 ),
               ),
               for (final side in widget.game.sides)
@@ -149,7 +150,7 @@ class _RoundBetsState extends State<RoundBets> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${totals[side.$1]} điểm'),
+                              Text('${formatCurrencyAmount(totals[side.$1]!)} VNĐ'),
                               if (widget.game.id == 'bau_cua' &&
                                   sideBets.isNotEmpty) ...[
                                 const SizedBox(height: 4),
@@ -162,7 +163,7 @@ class _RoundBetsState extends State<RoundBets> {
                                         visualDensity: VisualDensity.compact,
                                         padding: EdgeInsets.zero,
                                         label: Text(
-                                          '${bet.data()['nickname']?.toString() ?? 'Bạn ${bet.id.substring(0, bet.id.length < 6 ? bet.id.length : 6)}'} · ${(bet.data()['stakes'] as Map)[side.$1]}',
+                                          '${bet.data()['nickname']?.toString() ?? 'Bạn ${bet.id.substring(0, bet.id.length < 6 ? bet.id.length : 6)}'} · ${formatCurrencyAmount(((bet.data()['stakes'] as Map)[side.$1] as num).toInt())} VNĐ',
                                           style: const TextStyle(fontSize: 10),
                                         ),
                                       ),
@@ -186,7 +187,7 @@ class _RoundBetsState extends State<RoundBets> {
                         'Bạn ${bet.id.substring(0, bet.id.length < 6 ? bet.id.length : 6)}',
                   ),
                   subtitle: Text('UID ${bet.id} • ${bet.data()['stakes']}'),
-                  trailing: Text('${bet.data()['amount']} điểm'),
+                  trailing: Text('${formatCurrencyAmount((bet.data()['amount'] as num).toInt())} VNĐ'),
                 ),
             ],
           );

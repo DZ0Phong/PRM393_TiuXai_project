@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../core/currency_format.dart';
 /// Presentation-only Ba Cây arena. Round status, seats, winners and private
 /// cards come from the existing card-table backend stream.
 class BaCayArenaView extends StatefulWidget {
@@ -137,7 +138,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
               const Icon(Icons.toll, color: gold, size: 18),
               const SizedBox(width: 4),
               Text(
-                '${widget.balance} TX',
+                '${formatCurrencyAmount(widget.balance)} VNĐ',
                 style: const TextStyle(
                   color: Color(0xffffddb8),
                   fontWeight: FontWeight.bold,
@@ -183,7 +184,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
                 ),
               ),
               Text(
-                '${me?['stack'] ?? '—'} P',
+                '${me?['stack'] is num ? formatCurrencyAmount((me!['stack'] as num).toInt()) : '—'} VNĐ',
                 style: const TextStyle(color: Color(0xffffddb8), fontSize: 10),
               ),
               const SizedBox(width: 4),
@@ -209,7 +210,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
             children: [
               _stat(
                 'MỨC ANTE',
-                '${widget.table['stake'] ?? '—'} ĐIỂM',
+                '${widget.table['stake'] is num ? formatCurrencyAmount((widget.table['stake'] as num).toInt()) : '—'} VNĐ',
                 Icons.account_balance_wallet,
               ),
               Row(
@@ -233,7 +234,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
               ),
               _stat(
                 'GÓP TẨY',
-                '${widget.table['pot'] ?? 0} ĐIỂM',
+                '${widget.table['pot'] is num ? formatCurrencyAmount((widget.table['pot'] as num).toInt()) : '0'} VNĐ',
                 Icons.savings,
               ),
             ],
@@ -294,7 +295,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
                         ),
                       ),
                       Text(
-                        '${dealer?['stack'] ?? '—'} P',
+                        '${dealer?['stack'] is num ? formatCurrencyAmount((dealer!['stack'] as num).toInt()) : '—'} VNĐ',
                         style: const TextStyle(
                           color: Color(0xffffddb8),
                           fontWeight: FontWeight.bold,
@@ -410,7 +411,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
                     ),
                   ),
                   Text(
-                    'Số dư ${me?['stack'] ?? '—'} P',
+                    'Số dư ${me?['stack'] is num ? formatCurrencyAmount((me!['stack'] as num).toInt()) : '—'} VNĐ',
                     style: const TextStyle(
                       color: Color(0xffd8c3ad),
                       fontSize: 10,
@@ -664,7 +665,7 @@ class _BaCayArenaViewState extends State<BaCayArenaView> {
                 ),
               ),
               Text(
-                '${seat['stack'] ?? '—'} P • Bài được giữ riêng',
+                '${seat['stack'] is num ? formatCurrencyAmount((seat['stack'] as num).toInt()) : '—'} VNĐ • Bài được giữ riêng',
                 style: const TextStyle(color: Color(0xffd8c3ad), fontSize: 9),
               ),
             ],

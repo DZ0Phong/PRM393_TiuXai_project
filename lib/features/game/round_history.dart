@@ -38,7 +38,28 @@ class RoundHistory extends StatelessWidget {
         ? 48
         : 15;
     return ExpansionTile(
-      title: const Text('Lịch sử và cầu (chỉ mô tả, không dự đoán)'),
+      key: ValueKey('round_history_${game.id}'),
+      initiallyExpanded: game.id == 'bau_cua',
+      leading: Icon(
+        game.id == 'bau_cua' ? Icons.history_rounded : Icons.query_stats,
+        color: const Color(0xffffc174),
+      ),
+      title: Text(
+        game.id == 'bau_cua' ? 'Lịch sử Bầu Cua' : 'Lịch sử và cầu',
+        style: const TextStyle(
+          color: Color(0xffffc174),
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
+        ),
+      ),
+      subtitle: game.id == 'bau_cua'
+          ? const Text(
+              'Kết quả các phiên đã chốt',
+              style: TextStyle(color: Color(0xffb7a995), fontSize: 11),
+            )
+          : null,
+      iconColor: const Color(0xffffc174),
+      collapsedIconColor: const Color(0xffffc174),
       children: [
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
@@ -57,10 +78,23 @@ class RoundHistory extends StatelessWidget {
             if (!snapshot.hasData) return const LinearProgressIndicator();
             final rows = snapshot.data!.docs.map((doc) => doc.data()).toList();
             if (rows.isEmpty) {
-              return const ListTile(title: Text('Chưa có phiên đã chốt.'));
+              return game.id == 'bau_cua'
+                  ? _BauCuaHistoryEmpty()
+                  : const ListTile(title: Text('Chưa có phiên đã chốt.'));
             }
             if (game.id == 'bau_cua') {
               final recent = rows.take(15).toList();
+              final faceNames = {
+                for (final side in game.sides) side.$1: side.$2,
+              };
+              const faceEmojis = {
+                'nai': '🦌',
+                'bau': '🍈',
+                'ga': '🐓',
+                'ca': '🐟',
+                'cua': '🦀',
+                'tom': '🦐',
+              };
               final counts = <String, int>{
                 for (final side in game.sides) side.$1: 0,
               };
@@ -71,23 +105,244 @@ class RoundHistory extends StatelessWidget {
                   }
                 }
               }
-              return Column(
-                children: [
-                  Text(
-                    'Số mặt trong ${recent.length} phiên gần nhất (không phải tổng từ đầu)',
-                  ),
-                  Text(
-                    counts.entries
-                        .map((e) => '${e.key}: ${e.value}')
-                        .join(' • '),
-                  ),
-                  ...recent.map(
-                    (row) => ListTile(
-                      dense: true,
-                      title: Text((row['result'] as List? ?? []).join(' • ')),
+              return Container(
+                margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xff101319),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xff59462d)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Color(0xffffc174),
+                          size: 17,
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            'THỐNG KÊ ${recent.length} PHIÊN GẦN NHẤT',
+                            style: const TextStyle(
+                              color: Color(0xffffc174),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .45,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${recent.length} phiên',
+                          style: const TextStyle(
+                            color: Color(0xffb7a995),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Số lần xuất hiện của mỗi mặt trong các kết quả đã chốt',
+                      style: TextStyle(color: Color(0xffa99b89), fontSize: 10),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final side in game.sides)
+                          Container(
+                            width: 88,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xff1b1e24),
+                              borderRadius: BorderRadius.circular(11),
+                              border: Border.all(
+                                color: const Color(0xff39332b),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  faceEmojis[side.$1] ?? '🎲',
+                                  style: const TextStyle(fontSize: 15),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        side.$2,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Color(0xffd8c3ad),
+                                          fontSize: 9,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${counts[side.$1]} lần',
+                                        style: const TextStyle(
+                                          color: Color(0xffffc174),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 15, bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(child: Divider(color: Color(0xff39332b))),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'KẾT QUẢ GẦN ĐÂY',
+                              style: TextStyle(
+                                color: Color(0xffb7a995),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: .5,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: Color(0xff39332b))),
+                        ],
+                      ),
+                    ),
+                    ...recent.asMap().entries.map((entry) {
+                      final result = entry.value['result'] as List? ?? [];
+                      final settledAt = entry.value['settledAt'];
+                      final timeLabel = settledAt is Timestamp
+                          ? _historyTime(settledAt.toDate())
+                          : null;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xff1a1d23),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: entry.key == 0
+                                ? const Color(0xff8c6b32)
+                                : const Color(0xff34312b),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 25,
+                              height: 25,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: entry.key == 0
+                                    ? const Color(0xff3c2b15)
+                                    : const Color(0xff292b31),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                '${entry.key + 1}',
+                                style: TextStyle(
+                                  color: entry.key == 0
+                                      ? const Color(0xffffc174)
+                                      : const Color(0xffb7a995),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          entry.key == 0
+                                              ? 'Phiên mới nhất'
+                                              : 'Phiên ${entry.key + 1}',
+                                          style: const TextStyle(
+                                            color: Color(0xffe1e2eb),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                      if (timeLabel != null)
+                                        Text(
+                                          timeLabel,
+                                          style: const TextStyle(
+                                            color: Color(0xff8f8b84),
+                                            fontSize: 9,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Wrap(
+                                    spacing: 5,
+                                    runSpacing: 4,
+                                    children: [
+                                      for (final face in result)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xff30271b),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${faceEmojis['$face'] ?? '🎲'} ${faceNames['$face'] ?? face}',
+                                            style: const TextStyle(
+                                              color: Color(0xffffddb8),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Lịch sử chỉ mô tả các kết quả trước đó, không dự đoán phiên tiếp theo.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xff8f8b84), fontSize: 9),
+                    ),
+                  ],
+                ),
               );
             }
             final selected = game.id == 'tai_xiu' ? rows.take(120) : rows;
@@ -172,6 +427,48 @@ class RoundHistory extends StatelessWidget {
       ],
     );
   }
+}
+
+String _historyTime(DateTime value) {
+  final day = value.day.toString().padLeft(2, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$day/$month • $hour:$minute';
+}
+
+class _BauCuaHistoryEmpty extends StatelessWidget {
+  const _BauCuaHistoryEmpty();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: const Color(0xff101319),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xff59462d)),
+    ),
+    child: const Column(
+      children: [
+        Icon(Icons.history_rounded, color: Color(0xffffc174), size: 28),
+        SizedBox(height: 8),
+        Text(
+          'Chưa có phiên Bầu Cua đã chốt',
+          style: TextStyle(
+            color: Color(0xffffddb8),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        SizedBox(height: 3),
+        Text(
+          'Kết quả sẽ xuất hiện ở đây sau khi phiên đầu tiên kết thúc.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Color(0xffa99b89), fontSize: 10),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RoadMark extends StatelessWidget {
