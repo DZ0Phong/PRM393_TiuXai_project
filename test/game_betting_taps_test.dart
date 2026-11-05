@@ -34,6 +34,7 @@ void main() {
             child: xocXoc
                 ? XocXocBettingTable(
                     roundId: roundId,
+                    mode: 'random',
                     status: 'open',
                     secondsLeft: 30,
                     balance: balance,
