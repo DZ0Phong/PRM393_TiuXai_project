@@ -73,11 +73,9 @@ function payout(game, side, amount, result) {
   return payoutStake(game, side, amount, describeOutcome(game, result));
 }
 
-// Return excess from the larger pool only when both sides have accepted bets.
-// With no opposing pool, a solo player's wager is exposed to the result normally.
-// Use first-bet timestamp + uid for a stable allocation.
-function creditsForRound(game, bets, result) {
-  const outcome = describeOutcome(game, result);
+// Allocate the larger-side excess to the earliest accepted wagers. This same
+// allocation is applied when a round locks and retained at settlement.
+function balanceRefunds(game, bets) {
   const refund = new Map();
   if (game === 'tai_xiu') {
     const totals = {tai: 0, xiu: 0};
@@ -94,6 +92,14 @@ function creditsForRound(game, bets, result) {
       }
     }
   }
+  return refund;
+}
+
+// Legacy locked rounds still compute the balancing refund at settlement;
+// newly locked rounds have already had it credited and their stakes reduced.
+function creditsForRound(game, bets, result) {
+  const outcome = describeOutcome(game, result);
+  const refund = balanceRefunds(game, bets);
   return bets.map(b => {
     const returned = refund.get(b.uid) || 0;
     const credit = returned + Object.entries(b.stakes).reduce((sum, [side, amount]) =>
@@ -102,4 +108,4 @@ function creditsForRound(game, bets, result) {
   });
 }
 
-module.exports = {validateBet, validateOutcome, randomOutcome, payout, describeOutcome, creditsForRound, games};
+module.exports = {validateBet, validateOutcome, randomOutcome, payout, describeOutcome, balanceRefunds, creditsForRound, games};

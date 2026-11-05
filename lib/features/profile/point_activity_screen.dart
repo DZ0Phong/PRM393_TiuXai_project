@@ -580,6 +580,7 @@ class _PointOperation {
     'bet' => 'Đặt cược',
     'payout' => delta > 0 ? 'Nhận thưởng cược' : 'Kết quả cược',
     'refund' || 'bet_refund' => 'Hoàn cược',
+    'bet_balance_refund' => 'Hoàn cân cửa Tài/Xỉu',
     'admin_adjust' => 'Admin điều chỉnh điểm',
     'table_join' => 'Vào bàn bài',
     'table_refund' => 'Hoàn điểm rời bàn',
@@ -591,7 +592,8 @@ class _PointOperation {
     'welcome' => Icons.card_giftcard,
     'bet' || 'table_join' => Icons.casino,
     'payout' || 'table_result' => Icons.emoji_events,
-    'refund' || 'bet_refund' || 'table_refund' => Icons.replay,
+    'refund' || 'bet_refund' || 'bet_balance_refund' || 'table_refund' =>
+      Icons.replay,
     'admin_adjust' => Icons.admin_panel_settings,
     _ => Icons.swap_horiz,
   };

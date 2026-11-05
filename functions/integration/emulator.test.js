@@ -220,6 +220,34 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const ranking = await p.call('getLeaderboard');
     assert.ok(ranking.some((row) => row.nickname === `Bạn ${p.user.uid.slice(0, 6)}`));
     assert.ok(ranking.every((row) => row.balance < 100000));
+
+    const balanceRound = await boss.call('startRound', {game: 'tai_xiu', mode: 'admin'});
+    await p.call('placeBet', {roundId: balanceRound.roundId, side: 'tai', amount: 5000, requestId: 'balance-tai'});
+    await other.call('placeBet', {roundId: balanceRound.roundId, side: 'xiu', amount: 3000, requestId: 'balance-xiu'});
+    await db.doc(`rounds/${balanceRound.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
+    const beforeBalanceRefund = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
+    const locked = await p.call('lockRound', {roundId: balanceRound.roundId});
+    assert.equal(locked.balanceRefundTotal, 2000);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeBalanceRefund + 2000);
+    assert.equal((await db.doc(`rounds/${balanceRound.roundId}`).get()).data().totals.tai, 3000);
+    assert.equal((await db.doc(`rounds/${balanceRound.roundId}`).get()).data().totals.xiu, 3000);
+    assert.equal((await db.doc(`rounds/${balanceRound.roundId}/bets/${p.user.uid}`).get()).data().amount, 3000);
+    assert.equal((await db.doc(`users/${p.user.uid}/operations/balance_refund_${balanceRound.roundId}`).get()).data().delta, 2000);
+    assert.equal((await p.call('lockRound', {roundId: balanceRound.roundId})).status, 'locked');
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeBalanceRefund + 2000);
+
+    const xocCancelRound = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
+    await p.call('placeBet', {roundId: xocCancelRound.roundId, side: 'red4', amount: 3000, requestId: 'xoc-red4'});
+    await p.call('placeBet', {roundId: xocCancelRound.roundId, side: 'white3', amount: 2000, requestId: 'xoc-white3'});
+    const beforeCellCancel = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
+    await p.call('refundMyBet', {roundId: xocCancelRound.roundId, side: 'red4', requestId: 'xoc-cancel-red4'});
+    const xocAfterCellCancel = (await db.doc(`rounds/${xocCancelRound.roundId}`).get()).data();
+    const xocBetAfterCellCancel = (await db.doc(`rounds/${xocCancelRound.roundId}/bets/${p.user.uid}`).get()).data();
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, beforeCellCancel + 3000);
+    assert.equal(xocAfterCellCancel.totals.red4, 0);
+    assert.equal(xocAfterCellCancel.totals.white3, 2000);
+    assert.deepEqual(xocBetAfterCellCancel.stakes, {white3: 2000});
+    assert.equal(xocBetAfterCellCancel.amount, 2000);
   } finally { await Promise.all(apps.map(deleteApp)); }
 });
 

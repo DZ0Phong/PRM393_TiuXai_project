@@ -473,7 +473,9 @@ class _RoundScreenState extends State<RoundScreen> {
     bool rethrowOnError = false,
   }) async {
     if (busy) {
-      if (rethrowOnError) throw StateError('Thao tác khác đang xử lý; hãy thử lại.');
+      if (rethrowOnError) {
+        throw StateError('Thao tác khác đang xử lý; hãy thử lại.');
+      }
       return;
     }
     setState(() {
@@ -512,8 +514,7 @@ class _RoundScreenState extends State<RoundScreen> {
         });
         final data = response.data;
         final gameState = data is Map ? data[widget.game.id] : null;
-        final nextRoundId =
-            gameState is Map ? gameState['roundId'] : null;
+        final nextRoundId = gameState is Map ? gameState['roundId'] : null;
         if (finishedRoundId == null ||
             (nextRoundId is String && nextRoundId != finishedRoundId)) {
           return;
@@ -1011,7 +1012,8 @@ class _RoundScreenState extends State<RoundScreen> {
                     } else {
                       _scheduleRoundStreamRetry(id);
                     }
-                    final roundSnapshot = snapshot.data ??
+                    final roundSnapshot =
+                        snapshot.data ??
                         (_lastRoundSnapshotId == id
                             ? _lastRoundSnapshot
                             : null);
@@ -1153,6 +1155,8 @@ class _RoundScreenState extends State<RoundScreen> {
                                                 }
                                               }
                                             }
+                                            confirmedSide ??=
+                                                data?['side'] as String?;
                                             final confirmedAmount =
                                                 data?['amount'];
                                             final result = round['result'];
@@ -1168,6 +1172,13 @@ class _RoundScreenState extends State<RoundScreen> {
                                               confirmedAmount:
                                                   confirmedAmount is int
                                                   ? confirmedAmount
+                                                  : 0,
+                                              confirmedRefund:
+                                                  data?['refundedForBalance']
+                                                      is num
+                                                  ? (data!['refundedForBalance']
+                                                            as num)
+                                                        .toInt()
                                                   : 0,
                                               confirmedCredit:
                                                   data?['credit'] is num
@@ -1344,6 +1355,17 @@ class _RoundScreenState extends State<RoundScreen> {
                                             }
                                             return XocXocBettingTable(
                                               roundId: id,
+                                              onBackHome: () => Navigator.of(
+                                                context,
+                                              ).maybePop(),
+                                              onRefundBet: (side) =>
+                                                  _beginRoundMutation(
+                                                    'refundMyBet',
+                                                    {
+                                                      'roundId': id,
+                                                      'side': side,
+                                                    },
+                                                  ),
                                               status: status,
                                               secondsLeft: secondsLeft,
                                               balance: balance is int

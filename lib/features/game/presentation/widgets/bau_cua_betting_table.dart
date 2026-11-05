@@ -46,13 +46,11 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
   ];
   static const chips = [1000, 10000, 50000, 100000, 500000, 1000000];
   final Map<String, int> bets = {for (final item in symbols) item.$1: 0};
-  int chip = 10000;
+  int? selectedChip;
   bool allInSelected = false;
   bool sending = false;
   bool invalidCustomAmount = false;
-  final TextEditingController customAmount = TextEditingController(
-    text: '10000',
-  );
+  final TextEditingController customAmount = TextEditingController(text: '');
 
   @override
   void dispose() {
@@ -78,9 +76,14 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
     if (oldWidget.roundId != widget.roundId) {
       bets.updateAll((_, _) => 0);
       allInSelected = false;
+      selectedChip = null;
       invalidCustomAmount = false;
-      customAmount.text = '$chip';
+      customAmount.clear();
       sending = false;
+    }
+    if (oldWidget.status == 'open' && widget.status != 'open') {
+      selectedChip = null;
+      allInSelected = false;
     }
   }
 
@@ -100,13 +103,16 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
 
   void _addBet(String side) {
     if (!canBet) return;
+    final customStake = int.tryParse(customAmount.text.trim()) ?? 0;
     if ((!allInSelected && invalidCustomAmount) ||
         (!allInSelected &&
-            (chip < 1000 || chip > 1000000 || chip % 100 != 0))) {
+            (customStake < 1000 ||
+                customStake > 1000000 ||
+                customStake % 100 != 0))) {
       _notice('Mức cược tối thiểu 1.000 VNĐ và phải là bội số 100.');
       return;
     }
-    final amount = allInSelected ? allInAmount : chip;
+    final amount = allInSelected ? allInAmount : customStake;
     if (amount <= 0 ||
         total + confirmedTotal + amount > 1000000 ||
         total + amount > widget.balance) {
@@ -149,7 +155,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'BẦU CUA • BÀN XU ẢO',
+                    'BẦU CUA • BÀN CƯỢC',
                     style: TextStyle(
                       color: gold,
                       fontWeight: FontWeight.w800,
@@ -434,10 +440,10 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                                   ? '${value ~/ 1000000}M'
                                   : '${value ~/ 1000}K',
                             ),
-                            selected: chip == value,
+                            selected: selectedChip == value,
                             onSelected: canBet
                                 ? (_) => setState(() {
-                                    chip = value;
+                                    selectedChip = value;
                                     allInSelected = false;
                                     customAmount.text = '$value';
                                     invalidCustomAmount = false;
@@ -446,7 +452,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                             selectedColor: gold,
                             backgroundColor: const Color(0xff32353c),
                             labelStyle: TextStyle(
-                              color: chip == value
+                              color: selectedChip == value
                                   ? const Color(0xff2a1700)
                                   : Colors.white,
                               fontWeight: FontWeight.bold,
@@ -491,7 +497,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                     setState(() {
                       invalidCustomAmount = !valid;
                       allInSelected = false;
-                      if (valid) chip = value;
+                      selectedChip = null;
                     });
                   },
                   decoration: InputDecoration(

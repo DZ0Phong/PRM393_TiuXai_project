@@ -133,10 +133,48 @@ class _RoundBetsState extends State<RoundBets> {
                 ),
               ),
               for (final side in widget.game.sides)
-                ListTile(
-                  dense: true,
-                  title: Text('${side.$2} • ${counts[side.$1]} người'),
-                  subtitle: Text('${totals[side.$1]} điểm'),
+                Builder(
+                  builder: (context) {
+                    final sideBets = bets.where((bet) {
+                      final stakes = bet.data()['stakes'] as Map? ?? {};
+                      final amount = stakes[side.$1];
+                      return amount is num && amount > 0;
+                    }).toList();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListTile(
+                          dense: true,
+                          title: Text('${side.$2} • ${counts[side.$1]} người'),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${totals[side.$1]} điểm'),
+                              if (widget.game.id == 'bau_cua' &&
+                                  sideBets.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 0,
+                                  children: [
+                                    for (final bet in sideBets)
+                                      Chip(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                        label: Text(
+                                          '${bet.data()['nickname']?.toString() ?? 'Bạn ${bet.id.substring(0, bet.id.length < 6 ? bet.id.length : 6)}'} · ${(bet.data()['stakes'] as Map)[side.$1]}',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               const Divider(),
               if (bets.isEmpty) const ListTile(title: Text('Chưa có cược.')),

@@ -113,7 +113,18 @@ class _SignInScreenState extends State<SignInScreen> {
         ..showSnackBar(const SnackBar(content: Text('Đăng nhập thành công.')));
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = _getFriendlyAuthError(e.code, e.message));
+      const credentialErrors = {
+        'user-not-found',
+        'wrong-password',
+        'invalid-credential',
+        'invalid-login-credentials',
+        'invalid-email',
+      };
+      setState(
+        () => _errorMessage = credentialErrors.contains(e.code)
+            ? 'Email hoặc mật khẩu chưa chính xác.'
+            : _getFriendlyAuthError(e.code, e.message),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = 'Không thể kết nối máy chủ: $e');
@@ -1107,6 +1118,37 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xff690005).withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xffffb4ab)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xffffb4ab),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: Color(0xffffdad6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // CTA Nút Đăng Nhập
