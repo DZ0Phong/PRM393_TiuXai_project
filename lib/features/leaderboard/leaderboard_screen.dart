@@ -2,6 +2,8 @@ import 'package:tai_xiu_realtime/core/backend_functions.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
+
 class LeaderboardScreen extends StatefulWidget {
   final FirebaseFunctions functions;
 
@@ -112,7 +114,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   ],
                   const SizedBox(height: 12),
                   const Text(
-                    'Thứ hạng được sắp theo số dư xu ảo. Danh sách hiển thị tối đa 20 người chơi và được tải lại khi bạn làm mới.',
+                    'Thứ hạng được sắp theo số dư VNĐ mô phỏng. Danh sách hiển thị tối đa 20 người chơi và được tải lại khi bạn làm mới.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xff9b9ca5), fontSize: 12, height: 1.5),
                   ),
@@ -230,7 +232,7 @@ class _PodiumPlace extends StatelessWidget {
           Text(entry.nickname, maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Color(0xffe1e2eb), fontSize: 12)),
           const SizedBox(height: 4),
-          Text(_formatBalance(entry.balance), maxLines: 1, overflow: TextOverflow.ellipsis,
+          Text('${_formatBalance(entry.balance)} VNĐ', maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 8),
           Container(
@@ -271,7 +273,7 @@ class _RankingTile extends StatelessWidget {
           child: Icon(Icons.person, color: Color(0xffc6c7ce), size: 19)),
         const SizedBox(width: 12),
         Expanded(child: Text(entry.nickname, style: const TextStyle(color: Color(0xffe1e2eb), fontWeight: FontWeight.w600))),
-        Text('${_formatBalance(entry.balance)} TX',
+        Text('${_formatBalance(entry.balance)} VNĐ',
             style: const TextStyle(color: Color(0xffffc174), fontWeight: FontWeight.bold)),
       ],
     ),
@@ -311,11 +313,5 @@ class _MessageState extends StatelessWidget {
 }
 
 String _formatBalance(num value) {
-  final raw = value.toStringAsFixed(0);
-  final out = StringBuffer();
-  for (var i = 0; i < raw.length; i++) {
-    if (i > 0 && (raw.length - i) % 3 == 0) out.write(',');
-    out.write(raw[i]);
-  }
-  return out.toString();
+  return formatCurrencyAmount(value.round());
 }

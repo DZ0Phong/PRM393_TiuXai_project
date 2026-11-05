@@ -35,7 +35,7 @@ class AboutAppScreen extends StatelessWidget {
   Future<void> _share(BuildContext context) async {
     await Clipboard.setData(
       const ClipboardData(
-        text: 'Tài Xỉu PRM393 — ứng dụng demo trò chơi bằng xu ảo.',
+        text: 'Tài Xỉu PRM393 — ứng dụng demo trò chơi bằng VNĐ mô phỏng.',
       ),
     );
     if (context.mounted) {
@@ -280,7 +280,7 @@ class AboutAppScreen extends StatelessWidget {
                 ),
               ),
               const Text(
-                'Trải nghiệm trò chơi mô phỏng bằng xu ảo',
+                'Trải nghiệm trò chơi mô phỏng bằng VNĐ',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xffffddb8),
@@ -576,7 +576,7 @@ class AboutAppScreen extends StatelessWidget {
       ),
       SizedBox(height: 4),
       Text(
-        'Chỉ dùng xu ảo • Không giao dịch tiền thật',
+        'VNĐ mô phỏng • Không giao dịch tiền thật',
         textAlign: TextAlign.center,
         style: TextStyle(color: Color(0xff786b60), fontSize: 9),
       ),

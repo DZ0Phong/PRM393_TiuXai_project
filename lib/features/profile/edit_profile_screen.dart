@@ -8,8 +8,6 @@ import 'package:flutter/material.dart' hide Text;
 
 import '../../core/app_text.dart';
 
-import '../auth/otp_verification_screen.dart';
-
 const _profileBg = Color(0xff10131a);
 const _profileLow = Color(0xff191c22);
 const _profileSurface = Color(0xff1d2026);
@@ -31,20 +29,13 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _nickname;
-  late final TextEditingController _email;
-  final _phone = TextEditingController();
-  String _initialPhone = '';
   final _slogan = TextEditingController(
     text: 'Đánh là Thắng - Cầu bệt theo đến cùng',
   );
   late String _initialNickname;
-  late String _initialEmail;
   late String _initialSlogan;
-  DateTime? _initialBirthday;
   String _initialGender = 'male';
   String _initialFrame = 'dragon';
-  bool _emailVerified = false;
-  DateTime? _birthday;
   String _gender = 'male';
   String _frame = 'dragon';
   bool _saving = false;
@@ -57,11 +48,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     final userName = widget.user.email?.split('@').first ?? 'HoiVien';
     _initialNickname = userName.isEmpty ? 'Hội viên' : userName;
-    _initialEmail = widget.user.email ?? '';
-    _emailVerified = widget.user.emailVerified;
     _initialSlogan = _slogan.text;
     _nickname = TextEditingController(text: _initialNickname);
-    _email = TextEditingController(text: _initialEmail);
     _slogan.addListener(_refresh);
     unawaited(_loadProfile());
   }
@@ -78,22 +66,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             profile['nickname'] is String) {
           _nickname.text = profile['nickname'] as String;
         }
-        if (profile['phone'] is String) {
-          _phone.text = profile['phone'] as String;
-        }
-        _initialPhone = _phone.text;
         if (_slogan.text == _initialSlogan && profile['bio'] is String) {
           _slogan.text = profile['bio'] as String;
         }
-        final birthday = profile['birthday'];
-        if (birthday is String) _birthday = DateTime.tryParse(birthday);
         if (profile['gender'] is String) _gender = profile['gender'] as String;
         if (profile['avatarFrame'] is String) {
           _frame = profile['avatarFrame'] as String;
         }
         _initialNickname = _nickname.text;
         _initialSlogan = _slogan.text;
-        _initialBirthday = _birthday;
         _initialGender = _gender;
         _initialFrame = _frame;
       });
@@ -105,8 +86,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void dispose() {
     _nickname.dispose();
-    _email.dispose();
-    _phone.dispose();
     _slogan.removeListener(_refresh);
     _slogan.dispose();
     super.dispose();
@@ -122,35 +101,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ..showSnackBar(SnackBar(content: Text(value)));
   }
 
-  Future<void> _chooseBirthday() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _birthday ?? DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(1900),
-      lastDate: now,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: _profileGold,
-            onPrimary: Color(0xff472a00),
-            surface: _profileSurface,
-            onSurface: _profileText,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (date != null) setState(() => _birthday = date);
-  }
-
   void _cancel() {
     _nickname.text = _initialNickname;
-    _email.text = _initialEmail;
-    _phone.text = _initialPhone;
     _slogan.text = _initialSlogan;
     setState(() {
-      _birthday = _initialBirthday;
       _gender = _initialGender;
       _frame = _initialFrame;
     });
@@ -161,40 +115,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _message('Biệt danh không được để trống.');
       return;
     }
-    final newEmail = _email.text.trim();
-    final emailChanged = newEmail.toLowerCase() != _initialEmail.toLowerCase();
-    if (newEmail.isEmpty ||
-        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(newEmail)) {
-      _message('Nhập địa chỉ email hợp lệ.');
-      return;
-    }
     setState(() => _saving = true);
     try {
-      if (emailChanged) {
-        await FirebaseAuth.instance.currentUser!.verifyBeforeUpdateEmail(newEmail);
-        _email.text = _initialEmail;
-      }
       final result =
           await FirebaseFunctions.instanceFor(
             region: 'asia-southeast1',
           ).gameCallable('updateMyProfile').call<Map<String, dynamic>>({
             'nickname': _nickname.text.trim(),
             'bio': _slogan.text.trim(),
-            'birthday': _birthday?.toIso8601String().split('T').first,
             'gender': _gender,
             'avatarFrame': _frame,
           });
       if (!mounted) return;
       _initialNickname = _nickname.text.trim();
       _initialSlogan = _slogan.text.trim();
-      _initialBirthday = _birthday;
       _initialGender = _gender;
       _initialFrame = _frame;
       _message(
         result.data['ok'] == true
-            ? emailChanged
-                  ? 'Đã gửi liên kết xác minh đến email mới; email đăng nhập cũ còn hiệu lực đến khi xác minh.'
-                  : 'Đã lưu hồ sơ lên Firebase.'
+            ? 'Đã lưu hồ sơ lên Firebase.'
             : 'Không lưu được hồ sơ.',
       );
     } on FirebaseAuthException catch (error) {
@@ -261,13 +200,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 16),
             _buildNickname(),
             const SizedBox(height: 16),
-            _buildLockedName(),
-            const SizedBox(height: 16),
-            _buildPhone(),
-            const SizedBox(height: 16),
             _buildEmail(),
-            const SizedBox(height: 16),
-            _buildBirthday(),
             const SizedBox(height: 16),
             _buildGender(),
             const SizedBox(height: 16),
@@ -325,7 +258,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               Text(
-                'Tài khoản xu ảo • ${widget.user.emailVerified ? 'Email đã xác thực' : 'Email chưa xác thực'}',
+                'Tài khoản điểm mô phỏng • ${widget.user.emailVerified ? 'Email đã xác thực' : 'Email chưa xác thực'}',
                 style: const TextStyle(
                   color: _profileText,
                   fontSize: 12,
@@ -627,7 +560,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               SizedBox(height: 3),
               Text(
-                'Ứng dụng chỉ sử dụng xu ảo. Không có nạp/rút, đối soát ngân hàng hoặc quà tặng bằng tiền thật.',
+                'Số dư VNĐ trong ứng dụng chỉ là điểm mô phỏng. Không có nạp/rút, đối soát ngân hàng hoặc quà tặng bằng tiền thật.',
                 style: TextStyle(
                   color: _profileMuted,
                   fontSize: 11,
@@ -743,92 +676,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ],
   );
 
-  Widget _buildLockedName() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel(Icons.account_balance, 'Họ Và Tên Thật'),
-      const SizedBox(height: 7),
-      _fieldBox(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Chưa cung cấp',
-                style: TextStyle(
-                  color: _profileMuted,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Icon(Icons.lock, color: _profileOutline, size: 19),
-          ],
-        ),
-      ),
-      const SizedBox(height: 4),
-      const Text(
-        'Không yêu cầu thông tin ngân hàng hay giấy tờ cá nhân cho ứng dụng xu ảo này.',
-        style: TextStyle(color: _profileOutline, fontSize: 11),
-      ),
-    ],
-  );
-
-  Widget _buildPhone() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel(Icons.phone_iphone, 'Số Điện Thoại / Zalo'),
-      const SizedBox(height: 7),
-      _fieldBox(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _phone,
-                readOnly: true,
-                style: const TextStyle(
-                  color: _profileText,
-                  fontSize: 14,
-                  letterSpacing: 1,
-                ),
-                decoration: _inputDecoration('Chưa liên kết'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (_) => OtpVerificationScreen(user: widget.user),
-                  ),
-                );
-                await FirebaseAuth.instance.currentUser?.reload();
-                await _loadProfile();
-              },
-              style: TextButton.styleFrom(
-                backgroundColor: _profileHigh,
-                foregroundColor: _profileGold,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(7),
-                ),
-              ),
-              child: const Text('Cập nhật OTP', style: TextStyle(fontSize: 10)),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 4),
-      const Text(
-        'Số điện thoại chỉ được cập nhật sau khi xác minh SMS với Firebase Auth.',
-        style: TextStyle(color: _profileMuted, fontSize: 11),
-      ),
-    ],
-  );
-
   Widget _buildEmail() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -838,16 +685,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
+              child: Text(
+                widget.user.email ?? 'Chưa có email',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _profileText, fontSize: 14),
-                decoration: _inputDecoration('Email'),
               ),
             ),
             Icon(
-              _emailVerified ? Icons.verified : Icons.info_outline,
-              color: !_emailVerified ? _profileGold : _profileMint,
+              widget.user.emailVerified ? Icons.verified : Icons.lock_outline,
+              color: widget.user.emailVerified ? _profileMint : _profileGold,
               size: 18,
             ),
           ],
@@ -855,46 +702,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       const SizedBox(height: 4),
       const Text(
-        'Khi đổi email, xác nhận liên kết gửi đến email mới; đăng nhập lại nếu phiên đã cũ.',
-        style: TextStyle(color: _profileMuted, fontSize: 11),
-      ),
-    ],
-  );
-
-  Widget _buildBirthday() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel(Icons.cake, 'Ngày Sinh Nhật'),
-      const SizedBox(height: 7),
-      Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _chooseBirthday,
-          borderRadius: BorderRadius.circular(9),
-          child: _fieldBox(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _birthday == null
-                        ? 'Chọn ngày sinh (không bắt buộc)'
-                        : '${_birthday!.day.toString().padLeft(2, '0')}/${_birthday!.month.toString().padLeft(2, '0')}/${_birthday!.year}',
-                    style: TextStyle(
-                      color: _birthday == null ? _profileOutline : _profileText,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const Icon(Icons.calendar_today, color: _profileGold, size: 19),
-              ],
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 4),
-      const Text(
-        'Ngày sinh chỉ là thông tin giao diện; không có quà tặng hoặc cộng tiền.',
+        'Email tài khoản chỉ xem, không thể chỉnh sửa tại đây.',
         style: TextStyle(color: _profileMuted, fontSize: 11),
       ),
     ],

@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/currency_format.dart';
 import '../../core/pending_mutation.dart';
 import 'player_management_repository.dart';
 
@@ -219,9 +220,9 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('UID: $_selectedUid'),
-            Text('Hành động: ${signedAmount > 0 ? '+' : ''}$signedAmount xu'),
+            Text('Hành động: ${signedAmount > 0 ? '+' : ''}${formatCurrencyAmount(signedAmount)} VNĐ'),
             Text(
-              'Số dư dự kiến: ${(_selectedUser?['balance'] as num? ?? 0) + signedAmount} xu',
+              'Số dư dự kiến: ${formatCurrencyAmount(((_selectedUser?['balance'] as num? ?? 0) + signedAmount).toInt())} VNĐ',
             ),
             const SizedBox(height: 10),
             Text('Lý do: $why'),
@@ -432,7 +433,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                 ),
               ),
               Text(
-                '${user['balance'] ?? '—'} xu',
+                '${user['balance'] is num ? formatCurrencyAmount((user['balance'] as num).toInt()) : '—'} VNĐ',
                 style: const TextStyle(
                   color: Color(0xff56e5a9),
                   fontWeight: FontWeight.bold,
@@ -484,7 +485,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
             segments: const [
               ButtonSegment(
                 value: 1,
-                label: Text('Tặng xu (+)'),
+                label: Text('Tặng VNĐ (+)'),
                 icon: Icon(Icons.add_circle_outline),
               ),
               ButtonSegment(
@@ -545,7 +546,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                 icon: const Icon(Icons.account_balance_wallet_outlined),
                 label: Text(
                   _adjustmentSign > 0
-                      ? 'Tặng xu cho người chơi'
+                      ? 'Tặng VNĐ cho người chơi'
                       : 'Xác nhận trừ điểm',
                 ),
               ),
@@ -816,7 +817,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      '${data['balance'] ?? '—'} xu • ${blocked ? 'ĐÃ KHÓA' : (isBot ? 'BOT' : 'Hoạt động')}',
+                      '${data['balance'] is num ? formatCurrencyAmount((data['balance'] as num).toInt()) : '—'} VNĐ • ${blocked ? 'ĐÃ KHÓA' : (isBot ? 'BOT' : 'Hoạt động')}',
                       style: TextStyle(
                         color: blocked ? const Color(0xffff8e88) : _muted,
                         fontSize: 12,

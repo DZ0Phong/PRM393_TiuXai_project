@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/currency_format.dart';
 import 'game_win_effect.dart';
 
 class BauCuaBettingTable extends StatefulWidget {
@@ -102,14 +103,14 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
     if ((!allInSelected && invalidCustomAmount) ||
         (!allInSelected &&
             (chip < 1000 || chip > 1000000 || chip % 100 != 0))) {
-      _notice('Mức cược tối thiểu 1.000 điểm và phải là bội số 100.');
+      _notice('Mức cược tối thiểu 1.000 VNĐ và phải là bội số 100.');
       return;
     }
     final amount = allInSelected ? allInAmount : chip;
     if (amount <= 0 ||
         total + confirmedTotal + amount > 1000000 ||
         total + amount > widget.balance) {
-      _notice('Tổng cược mỗi phiên tối đa 1.000.000 điểm và không vượt số dư.');
+      _notice('Tổng cược mỗi phiên tối đa 1.000.000 VNĐ và không vượt số dư.');
       return;
     }
     setState(() {
@@ -118,10 +119,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
     });
   }
 
-  String fmt(int value) => value.toString().replaceAllMapped(
-    RegExp(r'(?=(\d{3})+(?!\d))'),
-    (_) => '.',
-  );
+  String fmt(int value) => formatCurrencyAmount(value);
 
   @override
   Widget build(BuildContext context) {
@@ -348,7 +346,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                           ),
                         ),
                         Text(
-                          'Cược: ${fmt(amount)}',
+                          'Cược: ${fmt(amount)} VNĐ',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -393,7 +391,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Số dư xu ảo: ${fmt(widget.balance)}',
+                        'Số dư: ${fmt(widget.balance)} VNĐ',
                         style: const TextStyle(
                           color: gold,
                           fontWeight: FontWeight.w700,
@@ -402,7 +400,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                       ),
                     ),
                     Text(
-                      'Tổng cược: ${fmt(total + confirmedTotal)}',
+                      'Tổng cược: ${fmt(total + confirmedTotal)} VNĐ',
                       style: const TextStyle(
                         color: Color(0xffe1e2eb),
                         fontWeight: FontWeight.bold,
@@ -459,7 +457,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ChoiceChip(
-                          label: Text('ALL IN • ${fmt(allInAmount)}'),
+                          label: Text('ALL IN • ${fmt(allInAmount)} VNĐ'),
                           selected: allInSelected,
                           onSelected: canBet && allInAmount > 0
                               ? (_) => setState(() => allInSelected = true)

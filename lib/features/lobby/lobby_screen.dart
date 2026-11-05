@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart' hide Text;
 
 import '../../core/app_text.dart';
-import '../cards/presentation/screens/card_table_screen.dart';
+import '../../core/currency_format.dart';
 import '../game/game_specs.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
@@ -83,6 +83,10 @@ class _LobbyState extends State<LobbyScreen> {
   }
 
   void _openCategory(int category, bool isAdmin) {
+    if (category >= 4) {
+      _showComingSoon();
+      return;
+    }
     setState(() => selectedCategory = category);
     if (category == 0) return;
     const roundIds = {1: 'tai_xiu', 2: 'bau_cua', 3: 'xoc_xoc'};
@@ -95,15 +99,12 @@ class _LobbyState extends State<LobbyScreen> {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CardTableScreen(
-          uid: widget.user.uid,
-          isAdmin: isAdmin,
-          game: category == 4 ? 'poker' : 'ba_cay',
-        ),
-      ),
-    );
+  }
+
+  void _showComingSoon() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Coming soon')));
   }
 
   @override
@@ -175,7 +176,7 @@ class _LobbyState extends State<LobbyScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'SỐ DƯ XU ẢO',
+                              'SỐ DƯ VNĐ',
                               style: TextStyle(
                                 color: Color(0xffd8c3ad),
                                 fontSize: 11,
@@ -193,7 +194,7 @@ class _LobbyState extends State<LobbyScreen> {
                                 final balance = snapshot.data
                                     ?.data()?['balance'];
                                 return Text(
-                                  '${balance ?? '…'} Xu',
+                                  '${balance is num ? formatCurrencyAmount(balance.toInt()) : '…'} VNĐ',
                                   style: const TextStyle(
                                     color: Color(0xffffc174),
                                     fontSize: 18,
@@ -260,10 +261,7 @@ class _LobbyState extends State<LobbyScreen> {
                       ValueListenableBuilder<int>(
                         valueListenable: jackpot,
                         builder: (context, value, _) => Text(
-                          value.toString().replaceAllMapped(
-                            RegExp(r'(?=(\d{3})+(?!\d))'),
-                            (_) => '.',
-                          ),
+                          formatCurrencyAmount(value),
                           style: const TextStyle(
                             color: Color(0xffffc174),
                             fontSize: 25,
@@ -272,7 +270,7 @@ class _LobbyState extends State<LobbyScreen> {
                         ),
                       ),
                       const Text(
-                        'Xu ảo • điểm mô phỏng, không quy đổi',
+                        'VNĐ mô phỏng • điểm dùng trong trò chơi, không quy đổi',
                         style: TextStyle(
                           color: Color(0xffd8c3ad),
                           fontSize: 12,
@@ -311,7 +309,7 @@ class _LobbyState extends State<LobbyScreen> {
                           ),
                         ),
                         Text(
-                          'Sự kiện mô phỏng • chơi bằng xu ảo',
+                          'Sự kiện mô phỏng • chơi bằng VNĐ mô phỏng',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
@@ -393,36 +391,6 @@ class _LobbyState extends State<LobbyScreen> {
                   childAspectRatio: .87,
                   children: [
                     _LobbySmallCard(
-                      title: 'Poker',
-                      subtitle: 'Texas Hold’em • 2–6 ghế',
-                      image: '',
-                      icon: Icons.style,
-                      onPlay: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => CardTableScreen(
-                            uid: widget.user.uid,
-                            isAdmin: isAdmin,
-                            game: 'poker',
-                          ),
-                        ),
-                      ),
-                    ),
-                    _LobbySmallCard(
-                      title: 'Ba Cây',
-                      subtitle: 'Bài 36 lá • so điểm',
-                      image: '',
-                      icon: Icons.style_outlined,
-                      onPlay: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => CardTableScreen(
-                            uid: widget.user.uid,
-                            isAdmin: isAdmin,
-                            game: 'ba_cay',
-                          ),
-                        ),
-                      ),
-                    ),
-                    _LobbySmallCard(
                       title: 'Xóc Đĩa VIP',
                       subtitle: 'Tứ trắng tứ đỏ',
                       image:
@@ -451,6 +419,20 @@ class _LobbyState extends State<LobbyScreen> {
                           ),
                         ),
                       ),
+                    ),
+                    _LobbySmallCard(
+                      title: 'Poker',
+                      subtitle: 'Coming soon',
+                      image: '',
+                      icon: Icons.style,
+                      onPlay: _showComingSoon,
+                    ),
+                    _LobbySmallCard(
+                      title: 'Ba Cây',
+                      subtitle: 'Coming soon',
+                      image: '',
+                      icon: Icons.style_outlined,
+                      onPlay: _showComingSoon,
                     ),
                   ],
                 ),
@@ -496,7 +478,7 @@ class _LobbyState extends State<LobbyScreen> {
                                 ),
                               ),
                               Text(
-                                '+36.800.000 Xu ảo',
+                                '+36.800.000đ',
                                 style: TextStyle(
                                   color: Color(0xffffc174),
                                   fontWeight: FontWeight.w700,
@@ -539,7 +521,7 @@ class _LobbyState extends State<LobbyScreen> {
                       .snapshots(),
                   builder: (context, user) {
                     if (user.hasError) {
-                      return Text('Không tải được số xu: ${user.error}');
+                      return Text('Không tải được số dư: ${user.error}');
                     }
                     if (!user.hasData) return const LinearProgressIndicator();
                     final data = user.data!.data();
@@ -551,7 +533,7 @@ class _LobbyState extends State<LobbyScreen> {
                           child: Icon(Icons.account_balance_wallet_outlined),
                         ),
                         title: Text(
-                          '${data?['balance'] ?? '—'} xu ảo',
+                          '${data?['balance'] is num ? formatCurrencyAmount((data!['balance'] as num).toInt()) : '—'} VNĐ',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -601,41 +583,6 @@ class _LobbyState extends State<LobbyScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                const SizedBox(height: 20),
-                Text(
-                  'Hoạt động xu ảo của bạn',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('users/${widget.user.uid}/operations')
-                      .orderBy('at', descending: true)
-                      .limit(20)
-                      .snapshots(),
-                  builder: (context, ops) {
-                    if (ops.hasError) {
-                      return Text('Không tải được hoạt động: ${ops.error}');
-                    }
-                    if (!ops.hasData) return const LinearProgressIndicator();
-                    if (ops.data!.docs.isEmpty) {
-                      return const Text('Chưa có hoạt động.');
-                    }
-                    return Column(
-                      children: ops.data!.docs.map((doc) {
-                        final op = doc.data();
-                        return ListTile(
-                          title: Text(
-                            '${op['kind'] ?? 'Hoạt động'} • ${op['delta'] ?? 0} xu',
-                          ),
-                          subtitle: Text(
-                            'Số dư sau: ${op['balance'] ?? '—'} • ${op['roundId'] ?? ''}',
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -652,7 +599,7 @@ class _LobbyState extends State<LobbyScreen> {
         if (index == 1 || index == 2 || index == 3) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Mục này chưa có chức năng trong phiên bản xu ảo.'),
+              content: Text('Mục này chưa có chức năng trong phiên bản mô phỏng.'),
             ),
           );
         }
@@ -771,7 +718,7 @@ class _LobbyFeatureCard extends StatelessWidget {
             children: [
               const Expanded(
                 child: Text(
-                  'Tổng cược phiên • xu ảo',
+                  'Tổng cược phiên • VNĐ',
                   style: TextStyle(color: Color(0xffd8c3ad), fontSize: 12),
                 ),
               ),

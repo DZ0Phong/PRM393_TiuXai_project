@@ -198,7 +198,7 @@ class _DetailedRoadScreenState extends State<DetailedRoadScreen> {
               ),
               const SizedBox(height: 3),
               const Text(
-                'Xu ảo · Không có tiền thật hay giá trị quy đổi',
+                'VNĐ mô phỏng · Không phải tiền thật, không quy đổi',
                 style: TextStyle(color: Color(0xffb9a78f), fontSize: 11),
               ),
             ],

@@ -108,7 +108,8 @@ exports.leaveGameRoom = call(async (req) => {
 });
 
 // Public ranking exposes only a pseudonym and simulated balance, never email or private profile.
-exports.getLeaderboard = call(async () => {
+exports.getLeaderboard = call(async (req) => {
+  const isAdmin = req.auth.token.admin === true;
   // Bot wallets may accumulate across tables. Page past them instead of assuming
   // that the first 25 wallet rows contain 20 human players.
   const people = [];
@@ -117,7 +118,9 @@ exports.getLeaderboard = call(async () => {
     let query = db.collection('users').orderBy('balance', 'desc').limit(100);
     if (cursor) query = query.startAfter(cursor);
     const snapshot = await query.get();
-    people.push(...snapshot.docs.filter((doc) => doc.data().isBot !== true && doc.data().preferences?.hideLeaderboard !== true));
+    people.push(...snapshot.docs.filter((doc) =>
+      doc.data().isBot !== true &&
+      (isAdmin || doc.data().preferences?.hideLeaderboard !== true)));
     if (snapshot.size < 100) break;
     cursor = snapshot.docs.at(-1);
   }

@@ -563,7 +563,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                     children: [
                       TextSpan(text: 'Tôi xác nhận đã đọc và hiểu đây là '),
                       TextSpan(
-                        text: 'ứng dụng demo dùng xu ảo',
+                        text: 'ứng dụng demo dùng VNĐ mô phỏng',
                         style: TextStyle(
                           color: _termsGold,
                           fontWeight: FontWeight.w700,

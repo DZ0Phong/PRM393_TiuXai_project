@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/currency_format.dart';
+
 /// Shows the net virtual-point profit after the server settles a round.
 class GameWinEffect extends StatefulWidget {
   final String roundId;
@@ -114,7 +116,7 @@ class _GameWinEffectState extends State<GameWinEffect> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '+${_format(amount)} Xu ảo',
+                      '+${formatCurrencyAmount(amount)}đ',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white,
@@ -136,11 +138,6 @@ class _GameWinEffectState extends State<GameWinEffect> {
       entry.dispose();
     });
   }
-
-  String _format(int value) => value.toString().replaceAllMapped(
-    RegExp(r'(?=(\d{3})+(?!\d))'),
-    (_) => '.',
-  );
 
   @override
   Widget build(BuildContext context) => widget.child;
