@@ -13,6 +13,8 @@ class XocXocBettingTable extends StatefulWidget {
   final List<dynamic>? result;
   final int? confirmedCredit;
   final Map<String, int> confirmedBets;
+  final VoidCallback onBackHome;
+  final Future<void> Function(String side) onRefundBet;
   final Future<void> Function(String side, int amount) onPlaceBet;
 
   const XocXocBettingTable({
@@ -25,6 +27,8 @@ class XocXocBettingTable extends StatefulWidget {
     required this.result,
     this.confirmedCredit,
     this.confirmedBets = const {},
+    required this.onBackHome,
+    required this.onRefundBet,
     required this.onPlaceBet,
   });
 
@@ -45,7 +49,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   ];
 
   final bets = <String, int>{for (final gate in gates) gate.$1: 0};
-  int selectedChip = 10000;
+  int? selectedChip;
   bool allInSelected = false;
   bool sending = false;
   bool revealed = false;
@@ -92,7 +96,12 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
+      selectedChip = null;
       sending = false;
+    }
+    if (oldWidget.status == 'open' && widget.status != 'open') {
+      selectedChip = null;
+      allInSelected = false;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       revealed = true;
@@ -101,7 +110,11 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   void _add(String side) {
     if (!canBet) return;
-    final amount = allInSelected ? allInAmount : selectedChip;
+    final amount = allInSelected ? allInAmount : (selectedChip ?? 0);
+    if (amount == 0) {
+      _notice('Hãy chọn mệnh giá chip trước khi đặt cược.');
+      return;
+    }
     final next = total + amount;
     if (amount <= 0) {
       _notice('Số dư khả dụng không đủ để đặt cược.');
@@ -164,6 +177,36 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   void _notice(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
+  Future<void> _cancelGate(String side) async {
+    if (!canBet) return;
+    final roundId = widget.roundId;
+    final confirmedAmount = widget.confirmedBets[side] ?? 0;
+    final draftAmount = bets[side] ?? 0;
+    if (confirmedAmount <= 0 && draftAmount <= 0) return;
+    setState(() => sending = true);
+    try {
+      if (confirmedAmount > 0) await widget.onRefundBet(side);
+      if (!mounted || widget.roundId != roundId) return;
+      setState(() {
+        bets[side] = 0;
+        allInSelected = false;
+      });
+      _notice(
+        confirmedAmount > 0
+            ? 'Đã hủy riêng cửa cược này và hoàn ${format(confirmedAmount)} xu.'
+            : 'Đã xóa cược nháp ở cửa này.',
+      );
+    } catch (error) {
+      if (mounted && widget.roundId == roundId) {
+        _notice('Chưa hủy được cược: $error');
+      }
+    } finally {
+      if (mounted && widget.roundId == roundId) {
+        setState(() => sending = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final open = widget.status == 'open' && widget.secondsLeft > 0;
@@ -188,12 +231,18 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           const SizedBox(height: 8),
           _confirmButton(),
           if (canBet && total > 0)
-            TextButton(
-              onPressed: () => setState(() {
-                bets.updateAll((_, _) => 0);
-                allInSelected = false;
-              }),
-              child: const Text('HỦY CÁC CỬA CHƯA XÁC NHẬN'),
+            TextButton.icon(
+              onPressed: sending
+                  ? null
+                  : () => setState(() {
+                      bets.updateAll((_, _) => 0);
+                      allInSelected = false;
+                    }),
+              icon: const Icon(Icons.undo, size: 18),
+              label: const Text('HỦY CÁC CỬA CHƯA XÁC NHẬN'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xff56e5a9),
+              ),
             ),
           const SizedBox(height: 8),
           _road(),
@@ -215,7 +264,12 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     decoration: _panel(),
     child: Row(
       children: [
-        const Icon(Icons.casino, color: gold),
+        IconButton(
+          tooltip: 'Về sảnh chính',
+          onPressed: widget.onBackHome,
+          icon: const Icon(Icons.home_outlined, color: gold),
+          visualDensity: VisualDensity.compact,
+        ),
         const SizedBox(width: 8),
         const Expanded(
           child: Column(
@@ -587,6 +641,28 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                   fontSize: 10,
                 ),
               ),
+              if (selected)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    height: 24,
+                    child: TextButton.icon(
+                      onPressed: canBet && !sending
+                          ? () => _cancelGate(gate.$1)
+                          : null,
+                      icon: const Icon(Icons.close, size: 13),
+                      label: const Text('Hủy cược'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xffff8c82),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        visualDensity: VisualDensity.compact,
+                        textStyle: const TextStyle(fontSize: 9),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -615,7 +691,11 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
             ),
             Text(
-              '${format(selectedChip)} ĐIỂM',
+              allInSelected
+                  ? 'ALL IN'
+                  : selectedChip == null
+                  ? 'CHƯA CHỌN CHIP'
+                  : '${format(selectedChip!)} ĐIỂM',
               style: const TextStyle(
                 color: Color(0xffffddb8),
                 fontWeight: FontWeight.bold,

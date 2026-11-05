@@ -20,6 +20,14 @@ class RoundOutcomePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totals = Map<String, dynamic>.from(round['totals'] as Map? ?? {});
+    if (game.id == 'bau_cua') {
+      return _BauCuaOutcomeSelector(
+        game: game,
+        totals: totals,
+        enabled: enabled,
+        onSelected: onSelected,
+      );
+    }
     final counts = Map<String, dynamic>.from(
       round['playerCounts'] as Map? ?? {},
     );
@@ -129,6 +137,116 @@ class RoundOutcomePicker extends StatelessWidget {
         const Text(
           'Ước tính thay đổi khi có cược/hoàn mới; thanh toán cuối cùng do backend tính.',
           style: TextStyle(color: Color(0xffd8c3ad), fontSize: 9),
+        ),
+      ],
+    );
+  }
+}
+
+class _BauCuaOutcomeSelector extends StatefulWidget {
+  final GameSpec game;
+  final Map<String, dynamic> totals;
+  final bool enabled;
+  final ValueChanged<RoundOutcomeChoice> onSelected;
+
+  const _BauCuaOutcomeSelector({
+    required this.game,
+    required this.totals,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  State<_BauCuaOutcomeSelector> createState() => _BauCuaOutcomeSelectorState();
+}
+
+class _BauCuaOutcomeSelectorState extends State<_BauCuaOutcomeSelector> {
+  final List<String?> _result = List<String?>.filled(3, null);
+
+  @override
+  Widget build(BuildContext context) {
+    final faces = widget.game.sides;
+    final faceNames = {for (final face in faces) face.$1: face.$2};
+    final counts = <String, int>{for (final face in faces) face.$1: 0};
+    for (final face in _result.whereType<String>()) {
+      counts[face] = counts[face]! + 1;
+    }
+    final winningSides = faces
+        .where((face) => counts[face.$1]! > 0)
+        .map((face) => face.$1)
+        .toList();
+    final estimatedCredit = winningSides.fold<int>(0, (sum, side) {
+      final stake = (widget.totals[side] as num? ?? 0).toInt();
+      final matches = counts[side]!;
+      return sum + stake * (100 + 98 * matches) ~/ 100;
+    });
+    final complete = _result.every((face) => face != null);
+    final choice = RoundOutcomeChoice(
+      _result.map((face) => face == null ? '—' : faceNames[face]!).join(' · '),
+      _result.whereType<String>().toList(),
+      winningSides,
+      estimatedCredit,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Chọn độc lập từng mặt trong 3 lượt gieo. Mỗi lượt chọn một trong 6 con; có thể chọn trùng nhau.',
+          style: TextStyle(color: Color(0xffd8c3ad), fontSize: 11),
+        ),
+        const SizedBox(height: 10),
+        for (var die = 0; die < 3; die++) ...[
+          Text(
+            'Lượt ${die + 1}: ${_result[die] == null ? 'Chưa chọn' : faceNames[_result[die]]}',
+            style: const TextStyle(
+              color: Color(0xffffc174),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Wrap(
+            spacing: 5,
+            runSpacing: 2,
+            children: [
+              for (final face in faces)
+                ChoiceChip(
+                  label: Text(face.$2),
+                  selected: _result[die] == face.$1,
+                  onSelected: !widget.enabled
+                      ? null
+                      : (_) => setState(() => _result[die] = face.$1),
+                  selectedColor: const Color(0xffffc174),
+                  backgroundColor: const Color(0xff272a31),
+                  labelStyle: TextStyle(
+                    color: _result[die] == face.$1
+                        ? const Color(0xff21180b)
+                        : const Color(0xffffddb8),
+                    fontSize: 11,
+                  ),
+                  side: const BorderSide(color: Color(0xff705123)),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
+        Text(
+          'Kết quả: ${choice.label}${complete ? ' · Cửa thắng: ${winningSides.map((side) => faceNames[side]).join(', ')} · Trả dự kiến: $estimatedCredit điểm' : ''}',
+          style: const TextStyle(color: Color(0xffd8c3ad), fontSize: 10),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: widget.enabled && complete
+              ? () => widget.onSelected(choice)
+              : null,
+          style: OutlinedButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            backgroundColor: const Color(0xff202329),
+            foregroundColor: const Color(0xffffddb8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            side: const BorderSide(color: Color(0xff976414)),
+          ),
+          child: Text('Lưu kết quả: ${choice.label}'),
         ),
       ],
     );

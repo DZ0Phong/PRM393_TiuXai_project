@@ -19,6 +19,7 @@ class TaiXiuBettingTable extends StatefulWidget {
   final int balance;
   final bool enabled;
   final int confirmedAmount;
+  final int confirmedRefund;
   final int? confirmedCredit;
   final String? confirmedSide;
   final Map<String, int> totalBySide;
@@ -35,6 +36,7 @@ class TaiXiuBettingTable extends StatefulWidget {
     required this.balance,
     required this.enabled,
     this.confirmedAmount = 0,
+    this.confirmedRefund = 0,
     this.confirmedCredit,
     this.confirmedSide,
     this.totalBySide = const {},
@@ -60,7 +62,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
     5000000,
     10000000,
   ];
-  int selectedChip = 100000;
+  int? selectedChip;
   bool allInSelected = false;
   int tai = 0;
   int xiu = 0;
@@ -105,12 +107,17 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
       previousTai = 0;
       previousXiu = 0;
       allInSelected = false;
+      selectedChip = null;
       lidOpen = false;
       manualPeek = false;
       draggingLid = false;
       lidDragStart = Offset.zero;
       lidDragOffset = Offset.zero;
       lidOpenOffset = const Offset(0, -210);
+    }
+    if (oldWidget.status == 'open' && widget.status != 'open') {
+      selectedChip = null;
+      allInSelected = false;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       // In manual mode, keep the bowl closed after settlement until the
@@ -151,7 +158,11 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
       _info('Tài Xỉu chỉ cho phép đặt một cửa trong mỗi phiên.');
       return;
     }
-    final amount = allInSelected ? _allInAmount : selectedChip;
+    final amount = allInSelected ? _allInAmount : (selectedChip ?? 0);
+    if (amount == 0) {
+      _info('Hãy chọn mệnh giá chip trước khi đặt cược.');
+      return;
+    }
     if (amount < 1000 ||
         amount % 100 != 0 ||
         amount > widget.balance - _draftTotal ||
@@ -404,6 +415,9 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                                 : 0),
                         tint: const Color(0xff27d39a),
                         totalBet: widget.totalBySide['xiu'] ?? 0,
+                        refunded: widget.confirmedSide == 'xiu'
+                            ? widget.confirmedRefund
+                            : 0,
                         players: widget.playerCountsBySide['xiu'] ?? 0,
                         canSubmit: xiu > 0,
                         onAdd: () => _add('xiu'),
@@ -419,6 +433,9 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                                 : 0),
                         tint: const Color(0xffff737d),
                         totalBet: widget.totalBySide['tai'] ?? 0,
+                        refunded: widget.confirmedSide == 'tai'
+                            ? widget.confirmedRefund
+                            : 0,
                         players: widget.playerCountsBySide['tai'] ?? 0,
                         canSubmit: tai > 0,
                         onAdd: () => _add('tai'),
@@ -781,8 +798,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                       manualPeek = false;
                       lidOpen = widget.status == 'settled';
                       lidOpenOffset = const Offset(0, -210);
-                      lidDragOffset =
-                          lidOpen ? lidOpenOffset : Offset.zero;
+                      lidDragOffset = lidOpen ? lidOpenOffset : Offset.zero;
                     }),
                   ),
                   _modeButton(
@@ -856,17 +872,13 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
               ),
             ),
             AnimatedSlide(
-              offset: Offset(
-                lidDragOffset.dx / 162,
-                lidDragOffset.dy / 162,
-              ),
+              offset: Offset(lidDragOffset.dx / 162, lidDragOffset.dy / 162),
               duration: draggingLid
                   ? Duration.zero
                   : const Duration(milliseconds: 350),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanStart:
-                    manualPeek && widget.status == 'settled' && !lidOpen
+                onPanStart: manualPeek && widget.status == 'settled' && !lidOpen
                     ? (_) => setState(() {
                         draggingLid = true;
                         lidDragStart = Offset.zero;
@@ -886,8 +898,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                             : next;
                       })
                     : null,
-                onPanEnd:
-                    manualPeek && widget.status == 'settled' && !lidOpen
+                onPanEnd: manualPeek && widget.status == 'settled' && !lidOpen
                     ? (_) {
                         final movement = lidDragOffset - lidDragStart;
                         final distance = movement.distance;
@@ -1018,6 +1029,7 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
     required String title,
     required String range,
     required int amount,
+    required int refunded,
     required Color tint,
     required int totalBet,
     required int players,
@@ -1091,6 +1103,17 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                if (refunded > 0)
+                  Text(
+                    'Hoàn cân cửa: ${format(refunded)} xu',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff27d39a),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 Text(
                   'Tổng: ${format(totalBet)} • $players người',
                   maxLines: 1,

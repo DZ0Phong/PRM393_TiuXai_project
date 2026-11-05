@@ -275,10 +275,11 @@ exports.placeBet = call(async (req) => {
   });
 });
 
-// Bầu Cua players may return their complete accepted stake while betting is
-// still open, before the server locks the round.
+// Bầu Cua players may return all accepted stakes; Xóc Xóc players can cancel
+// one selected door. Both actions are allowed only before the round locks.
 exports.refundMyBet = call(async (req) => {
   const roundId = id(req.data?.roundId), requestId = id(req.data?.requestId);
+  const requestedSide = req.data?.side;
   const ref = db.doc(`rounds/${roundId}`), user = db.doc(`users/${req.auth.uid}`);
   const bet = ref.collection('bets').doc(req.auth.uid);
   const op = user.collection('operations').doc(`bet_refund_${roundId}_${requestId}`);
@@ -288,29 +289,48 @@ exports.refundMyBet = call(async (req) => {
     ]);
     active(wallet);
     if (existingOp.exists) return existingOp.data();
-    if (!round.exists || round.data().game !== 'bau_cua') fail('Không có phiên Bầu Cua');
+    if (!round.exists || !['bau_cua', 'xoc_xoc'].includes(round.data().game))
+      fail('Không có phiên cược hỗ trợ hủy cược');
     if (round.data().status !== 'open' || round.data().closesAt.toMillis() <= Date.now())
       fail('Chỉ hoàn cược khi phiên còn mở');
     if (!existingBet.exists || !Number.isSafeInteger(existingBet.data().amount) || existingBet.data().amount <= 0)
       fail('Không có cược đã xác nhận để hoàn');
-    const amount = existingBet.data().amount;
+    const game = round.data().game;
+    const currentBet = existingBet.data();
+    if (game === 'xoc_xoc' &&
+        (typeof requestedSide !== 'string' || !Object.hasOwn(currentBet.stakes || {}, requestedSide)))
+      fail('Không có cược đã xác nhận ở cửa này');
+    if (game === 'bau_cua' && requestedSide !== undefined)
+      fail('Bầu Cua chỉ hỗ trợ hủy toàn bộ cược');
+    const refundSides = game === 'xoc_xoc' ? [requestedSide] : Object.keys(currentBet.stakes || {});
+    const amount = game === 'xoc_xoc'
+      ? currentBet.stakes[requestedSide]
+      : currentBet.amount;
+    if (!Number.isSafeInteger(amount) || amount <= 0) fail('Số cược cần hủy không hợp lệ');
     const stats = round.data().totals && round.data().playerCounts
       ? {totals: {...round.data().totals}, playerCounts: {...round.data().playerCounts}}
-      : betStatsFromDocs((await tx.get(ref.collection('bets'))).docs, 'bau_cua');
-    for (const [side, stake] of Object.entries(existingBet.data().stakes || {})) {
+      : betStatsFromDocs((await tx.get(ref.collection('bets'))).docs, game);
+    const stakes = {...(currentBet.stakes || {})};
+    for (const side of refundSides) {
+      const stake = stakes[side] || 0;
       if (!Number.isSafeInteger(stake) || stake <= 0) continue;
       stats.totals[side] = Math.max(0, (stats.totals[side] || 0) - stake);
       stats.playerCounts[side] = Math.max(0, (stats.playerCounts[side] || 0) - 1);
+      delete stakes[side];
     }
     const balance = wallet.data().balance + amount;
     if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
     const at = now();
     tx.update(user, {balance});
     tx.update(ref, stats);
-    tx.update(bet, {amount: 0, stakes: {}, side: null, lastAt: at});
-    const operation = {kind: 'bet_refund', roundId, delta: amount, balance, at};
+    const remainingAmount = currentBet.amount - amount;
+    tx.update(bet, {amount: remainingAmount, stakes, side: currentBet.side || null, lastAt: at});
+    const operation = {
+      kind: 'bet_refund', game, roundId, side: game === 'xoc_xoc' ? requestedSide : null,
+      delta: amount, balance, at,
+    };
     tx.create(op, operation);
-    audit(tx, req.auth.uid, 'BET_REFUND', {game: 'bau_cua', roundId, amount});
+    audit(tx, req.auth.uid, 'BET_REFUND', {game, roundId, side: operation.side, amount});
     return operation;
   });
 });
@@ -320,11 +340,68 @@ async function lock(roundId, actor) {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) fail('Không có phiên');
-    if (snap.data().status !== 'open') return {status: snap.data().status};
-    if (snap.data().closesAt.toMillis() > Date.now()) fail('Chưa hết hạn cược');
-    tx.update(ref, {status: 'locked', lockedAt: now()});
-    audit(tx, actor, 'LOCK', {roundId});
-    return {status: 'locked'};
+    const round = snap.data();
+    const isLegacyLockedTaiXiu = round.status === 'locked' &&
+      round.game === 'tai_xiu' && round.balanceRefundApplied !== true;
+    if (round.status !== 'open' && !isLegacyLockedTaiXiu) return {status: round.status};
+    if (round.status === 'open' && round.closesAt.toMillis() > Date.now()) fail('Chưa hết hạn cược');
+
+    // Freeze the wagers and return the larger-side excess in this transaction,
+    // so the wallet and public side totals are balanced as soon as betting ends.
+    const betsSnap = await tx.get(ref.collection('bets'));
+    const bets = betsSnap.docs.map((doc) => ({
+      uid: doc.id,
+      ...doc.data(),
+      atMillis: doc.data().at?.toMillis?.() || 0,
+    }));
+    const refunds = games.balanceRefunds(round.game, bets);
+    const refundDocs = betsSnap.docs.filter((bet) => (refunds.get(bet.id) || 0) > 0);
+    const users = await Promise.all(refundDocs.map((bet) => tx.get(db.doc(`users/${bet.id}`))));
+    const stats = round.game === 'tai_xiu' ? betStatsFromDocs(betsSnap.docs, round.game) : null;
+    const refundRecords = [];
+    let refundTotal = 0;
+
+    refundDocs.forEach((bet, index) => {
+      const amount = refunds.get(bet.id);
+      const user = users[index];
+      if (!user.exists) fail('Không tìm thấy ví để hoàn phần cược dư');
+      const balance = user.data().balance + amount;
+      if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
+
+      const data = bet.data();
+      const side = data.stakes?.tai ? 'tai' : 'xiu';
+      const remaining = data.amount - amount;
+      const stakes = {...data.stakes};
+      const remainingOnSide = (stakes[side] || 0) - amount;
+      if (remainingOnSide > 0) stakes[side] = remainingOnSide;
+      else delete stakes[side];
+
+      tx.update(user.ref, {balance});
+      tx.update(bet.ref, {
+        amount: remaining,
+        stakes,
+        refundedForBalance: (data.refundedForBalance || 0) + amount,
+      });
+      tx.create(user.ref.collection('operations').doc(`balance_refund_${roundId}`), {
+        kind: 'bet_balance_refund', game: round.game, roundId, side,
+        reason: 'Cân bằng cược Tài/Xỉu khi khóa phiên',
+        delta: amount, balance, at: now(),
+      });
+      stats.totals[side] = Math.max(0, stats.totals[side] - amount);
+      if (remainingOnSide <= 0) stats.playerCounts[side] = Math.max(0, stats.playerCounts[side] - 1);
+      refundTotal += amount;
+      refundRecords.push({uid: bet.id, side, amount});
+    });
+
+    tx.update(ref, {
+      status: 'locked', ...(round.status === 'open' ? {lockedAt: now()} : {}),
+      ...(stats ? stats : {}),
+      ...(round.game === 'tai_xiu'
+        ? {balanceRefundApplied: true, balanceRefundTotal: refundTotal}
+        : {}),
+    });
+    audit(tx, actor, 'LOCK', {roundId, balanceRefundTotal: refundTotal, refunds: refundRecords});
+    return {status: 'locked', balanceRefundTotal: refundTotal};
   });
 }
 // Preserve the callable for player clients that advance an expired betting
@@ -403,6 +480,11 @@ exports.advanceRandomRound = call(async (req) => {
   if (snap.data().status === 'open') {
     if (snap.data().closesAt.toMillis() > Date.now())
       return {status: 'open', notDue: true};
+    await lock(roundId, 'scheduler');
+  } else if (snap.data().status === 'locked' && snap.data().game === 'tai_xiu' &&
+      snap.data().balanceRefundApplied !== true) {
+    // Repair rounds that were locked by an older backend before balancing was
+    // moved to lock time. The lock transaction is idempotent via its marker.
     await lock(roundId, 'scheduler');
   }
   await settle(roundId, 'scheduler');

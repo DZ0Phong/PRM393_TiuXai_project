@@ -118,7 +118,7 @@ CI dùng Node 24, chạy test Flutter, Android debug build, Functions và Emulat
 
 ## Quy tắc và hạn chế
 
-- Tài/Xỉu: ba xúc xắc 1–6; bộ ba thua cả hai cửa; nếu không phải bộ ba, tổng <=10 là Xỉu và >=11 là Tài. Cửa thắng trả gốc + lãi 98% (1,98×). Chỉ hoàn phần cược dư ở cửa có tổng cược lớn hơn khi cả hai cửa đều có cược; nếu cửa đối diện trống thì cược chịu kết quả bình thường.
+- Tài/Xỉu: ba xúc xắc 1–6; bộ ba thua cả hai cửa; nếu không phải bộ ba, tổng <=10 là Xỉu và >=11 là Tài. Cửa thắng trả gốc + lãi 98% (1,98×). Khi khóa phiên, hoàn phần cược dư ở cửa có tổng cược lớn hơn để hai tổng cược ròng bằng nhau, chỉ khi cả hai cửa đều có cược; nếu cửa đối diện trống thì cược chịu kết quả bình thường. Tiền hoàn được ghi vào ví và cập nhật trên màn cược ngay lúc khóa.
 - Bầu Cua: ba mặt trong `bau,cua,tom,ca,ga,nai`; trúng n mặt nhận gốc + 98% × n × cược (1,98×/2,96×/3,94×).
 - Xóc Xóc: bốn bit 0/1; sáu cửa Chẵn/Lẻ, ba đỏ/trắng và bốn đỏ/trắng, mức trả 1,98×/3,94×/14,7×.
 - Player không đọc được plan/audit/lý do hoặc nhãn `mode`/`plannedAt` trong phiên mới; app chỉ hiển thị trạng thái, cược và kết quả sau chốt. Đây **không phải** bảo đảm bí mật tuyệt đối hay tính ngẫu nhiên công bằng: mã APK, phân tích thống kê và dữ liệu phiên cũ có thể để lộ cơ chế. Cần giải thích cơ chế admin cho lớp trong phần tổng kết; không quảng bá mọi phiên là random độc lập.
