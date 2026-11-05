@@ -132,7 +132,6 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       for (final entry in selected) {
         if (!mounted ||
             widget.roundId != roundId ||
-            !widget.enabled ||
             widget.status != 'open' ||
             widget.secondsLeft <= 0 ||
             entry.value > widget.balance ||
@@ -188,10 +187,13 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           _chipSelector(),
           const SizedBox(height: 8),
           _confirmButton(),
-          if (canBet && total > 0 && !canSubmit)
+          if (canBet && total > 0)
             TextButton(
-              onPressed: () => setState(() => bets.updateAll((_, _) => 0)),
-              child: const Text('Xóa cược chưa gửi'),
+              onPressed: () => setState(() {
+                bets.updateAll((_, _) => 0);
+                allInSelected = false;
+              }),
+              child: const Text('HỦY CÁC CỬA CHƯA XÁC NHẬN'),
             ),
           const SizedBox(height: 8),
           _road(),

@@ -193,20 +193,112 @@ class _RoundScreenState extends State<RoundScreen> {
     text: 'Điều hành phiên mô phỏng trong lớp',
   );
   final now = ValueNotifier(DateTime.now());
-  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _roomStream =
-      FirebaseFirestore.instance
-          .doc('rooms/${widget.game.id}')
-          .snapshots(includeMetadataChanges: true);
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _roomStream =
+      _watchRoom();
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream =
       FirebaseFirestore.instance.doc('users/${widget.uid}').snapshots();
   String? _observedRoundId;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _roundStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _betStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _planStream;
+  int _roomStreamVersion = 0;
+  int _roundStreamVersion = 0;
+  Timer? _roomRetryTimer;
+  Timer? _roundRetryTimer;
+  int _roomRetryCount = 0;
+  int _roundRetryCount = 0;
+  DocumentSnapshot<Map<String, dynamic>>? _lastRoomSnapshot;
+  DocumentSnapshot<Map<String, dynamic>>? _lastRoundSnapshot;
+  String? _lastRoundSnapshotId;
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _watchRoom() =>
+      FirebaseFirestore.instance
+          .doc('rooms/${widget.game.id}')
+          .snapshots(includeMetadataChanges: true);
+
+  void _retryRoomStream({bool resetAttempts = true}) {
+    if (!mounted) return;
+    _roomRetryTimer?.cancel();
+    if (resetAttempts) _roomRetryCount = 0;
+    setState(() {
+      _roomStream = _watchRoom();
+      _roomStreamVersion++;
+    });
+  }
+
+  void _scheduleRoomStreamRetry() {
+    if (!mounted || _roomRetryTimer?.isActive == true || _roomRetryCount >= 3) {
+      return;
+    }
+    final delay = Duration(seconds: 2 << _roomRetryCount);
+    _roomRetryCount++;
+    _roomRetryTimer = Timer(
+      delay,
+      () => _retryRoomStream(resetAttempts: false),
+    );
+  }
+
+  void _retryRoundStreams(String id, {bool resetAttempts = true}) {
+    if (!mounted || _observedRoundId != id) return;
+    _roundRetryTimer?.cancel();
+    if (resetAttempts) _roundRetryCount = 0;
+    setState(() {
+      _roundStream = FirebaseFirestore.instance
+          .doc('rounds/$id')
+          .snapshots(includeMetadataChanges: true);
+      _betStream = FirebaseFirestore.instance
+          .doc('rounds/$id/bets/${widget.uid}')
+          .snapshots();
+      _roundStreamVersion++;
+    });
+  }
+
+  void _scheduleRoundStreamRetry(String id) {
+    if (!mounted ||
+        _observedRoundId != id ||
+        _roundRetryTimer?.isActive == true ||
+        _roundRetryCount >= 3) {
+      return;
+    }
+    final delay = Duration(seconds: 2 << _roundRetryCount);
+    _roundRetryCount++;
+    _roundRetryTimer = Timer(
+      delay,
+      () => _retryRoundStreams(id, resetAttempts: false),
+    );
+  }
+
+  Widget _loadingPanel(String label, VoidCallback onRetry) => Card(
+    color: const Color(0xff191c22),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const LinearProgressIndicator(),
+          const SizedBox(height: 12),
+          Text(label, style: const TextStyle(color: Color(0xffe1e2eb))),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tải lại'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   void _observeRound(String id) {
     if (_observedRoundId == id) return;
+    _roundRetryTimer?.cancel();
+    _roundRetryCount = 0;
     _observedRoundId = id;
+    _lastRoundSnapshot = null;
+    _lastRoundSnapshotId = id;
     _roundStream = FirebaseFirestore.instance
         .doc('rounds/$id')
         .snapshots(includeMetadataChanges: true);
@@ -246,6 +338,8 @@ class _RoundScreenState extends State<RoundScreen> {
   @override
   void dispose() {
     timer?.cancel();
+    _roomRetryTimer?.cancel();
+    _roundRetryTimer?.cancel();
     unawaited(_leaveRoom());
     now.dispose();
     amount.dispose();
@@ -279,15 +373,34 @@ class _RoundScreenState extends State<RoundScreen> {
   }
 
   Future<void> _loadPendingMutation() async {
+    Map<String, dynamic>? pending;
     try {
-      final pending = await _mutationStore.load(_mutationKey);
-      if (mounted) setState(() => _pendingMutation = pending);
+      pending = await _mutationStore.load(_mutationKey);
+      if (mounted) {
+        setState(() {
+          _pendingMutation = pending;
+          _pendingLoaded = true;
+        });
+      }
     } catch (error) {
       if (mounted) {
-        setState(() => message = 'Không đọc được cược đang chờ: $error');
+        setState(() {
+          message = 'Không đọc được thao tác đang chờ: $error';
+          _pendingLoaded = true;
+        });
       }
-    } finally {
-      if (mounted) setState(() => _pendingLoaded = true);
+      return;
+    }
+
+    // Retry a saved request with its original requestId. Backend operations
+    // are idempotent, so an already accepted bet is acknowledged, not charged
+    // a second time. This also clears stale local notices after app restarts.
+    if (pending != null && mounted) {
+      try {
+        await _sendPendingMutation();
+      } catch (_) {
+        // Keep the request for a later retry if the result is still uncertain.
+      }
     }
   }
 
@@ -370,7 +483,11 @@ class _RoundScreenState extends State<RoundScreen> {
       if (name == 'cancelRound') {
         unawaited(_ensureNextSessions());
       }
-      if (mounted) setState(() => message = 'Thao tác đã hoàn tất.');
+      if (mounted) {
+        setState(
+          () => message = name == 'placeBet' ? null : 'Thao tác đã hoàn tất.',
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => message = readableError(e));
       if (rethrowOnError) rethrow;
@@ -379,15 +496,34 @@ class _RoundScreenState extends State<RoundScreen> {
     }
   }
 
-  Future<void> _ensureNextSessions() async {
-    await Future<void>.delayed(const Duration(seconds: 7));
-    if (!mounted) return;
-    try {
-      await functions.gameCallable('ensureGameRounds').call({
-        'game': widget.game.id,
-      });
-    } catch (error) {
-      if (mounted) setState(() => message = readableError(error));
+  Future<void> _ensureNextSessions({String? finishedRoundId}) async {
+    // The backend keeps the result visible for six seconds. Request the next
+    // round at the end of that window, then retry briefly if the request or
+    // reveal-window boundary races with the server. This avoids waiting for
+    // the once-per-minute scheduler after a transient failure.
+    await Future<void>.delayed(const Duration(seconds: 6));
+    for (var attempt = 0; attempt < 5; attempt++) {
+      if (!mounted) return;
+      try {
+        final response = await functions.gameCallable('ensureGameRounds').call({
+          'game': widget.game.id,
+        });
+        final data = response.data;
+        final gameState = data is Map ? data[widget.game.id] : null;
+        final nextRoundId =
+            gameState is Map ? gameState['roundId'] : null;
+        if (finishedRoundId == null ||
+            (nextRoundId is String && nextRoundId != finishedRoundId)) {
+          return;
+        }
+      } catch (error) {
+        if (attempt == 4 && mounted) {
+          setState(() => message = readableError(error));
+        }
+      }
+      if (attempt < 4) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
     }
   }
 
@@ -409,7 +545,7 @@ class _RoundScreenState extends State<RoundScreen> {
       if (data is Map && data['notDue'] == true) return;
       if (data is Map && data['waiting'] == true) return;
       _advancedRounds.add(roundId);
-      await _ensureNextSessions();
+      await _ensureNextSessions(finishedRoundId: roundId);
     } catch (error) {
       if (mounted) setState(() => message = readableError(error));
     } finally {
@@ -792,22 +928,20 @@ class _RoundScreenState extends State<RoundScreen> {
                 ),
               ),
             if (!widget.isAdmin && _pendingMutation != null)
-              ListTile(
-                title: const Text('Cược/hoàn cược chưa xác nhận'),
-                subtitle: const Text(
-                  'Mạng có thể đã ngắt sau khi server ghi. Thử lại cùng requestId để không trừ điểm hai lần.',
-                ),
-                trailing: TextButton(
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
                   onPressed: busy
                       ? null
                       : () async {
                           try {
                             await _sendPendingMutation();
                           } catch (_) {
-                            /* Message shown by call. */
+                            /* Error remains available in the compact status. */
                           }
                         },
-                  child: const Text('Thử lại'),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Thử lại'),
                 ),
               ),
             if (widget.isAdmin)
@@ -822,13 +956,28 @@ class _RoundScreenState extends State<RoundScreen> {
                 ),
               ),
             StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              key: ValueKey('room_$_roomStreamVersion'),
               stream: _roomStream,
               builder: (context, room) {
                 if (room.hasError) {
+                  _scheduleRoomStreamRetry();
                   return Text('Không tải được phòng: ${room.error}');
                 }
-                if (!room.hasData) return const LinearProgressIndicator();
-                final id = room.data!.data()?['roundId'] as String?;
+                if (room.hasData) {
+                  _lastRoomSnapshot = room.data;
+                  _roomRetryTimer?.cancel();
+                  _roomRetryCount = 0;
+                } else {
+                  _scheduleRoomStreamRetry();
+                }
+                final roomSnapshot = room.data ?? _lastRoomSnapshot;
+                if (roomSnapshot == null) {
+                  return _loadingPanel(
+                    'Đang tải phòng ${widget.game.title}…',
+                    _retryRoomStream,
+                  );
+                }
+                final id = roomSnapshot.data()?['roundId'] as String?;
                 if (id != null) _observeRound(id);
                 if (id == null) {
                   return Card(
@@ -845,16 +994,32 @@ class _RoundScreenState extends State<RoundScreen> {
                   );
                 }
                 return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  key: ValueKey(id),
+                  key: ValueKey('${id}_$_roundStreamVersion'),
                   stream: _roundStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
+                      _scheduleRoundStreamRetry(id);
                       return Text('Không tải được phiên: ${snapshot.error}');
                     }
-                    if (!snapshot.hasData) {
-                      return const LinearProgressIndicator();
+                    if (snapshot.hasData) {
+                      _lastRoundSnapshot = snapshot.data;
+                      _lastRoundSnapshotId = id;
+                      _roundRetryTimer?.cancel();
+                      _roundRetryCount = 0;
+                    } else {
+                      _scheduleRoundStreamRetry(id);
                     }
-                    final round = snapshot.data!.data();
+                    final roundSnapshot = snapshot.data ??
+                        (_lastRoundSnapshotId == id
+                            ? _lastRoundSnapshot
+                            : null);
+                    if (roundSnapshot == null) {
+                      return _loadingPanel(
+                        'Đang tải phiên chơi…',
+                        () => _retryRoundStreams(id),
+                      );
+                    }
+                    final round = roundSnapshot.data();
                     if (round == null) {
                       return const Text('Phiên không tồn tại hoặc đã bị xóa.');
                     }
@@ -862,8 +1027,8 @@ class _RoundScreenState extends State<RoundScreen> {
                       return const Text('Dữ liệu phòng không khớp trò chơi.');
                     }
                     final offline =
-                        room.data!.metadata.isFromCache ||
-                        snapshot.data!.metadata.isFromCache;
+                        roomSnapshot.metadata.isFromCache ||
+                        roundSnapshot.metadata.isFromCache;
                     final status = round['status']?.toString() ?? 'không rõ';
                     return Card(
                       color:

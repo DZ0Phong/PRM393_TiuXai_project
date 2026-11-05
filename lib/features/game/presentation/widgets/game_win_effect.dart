@@ -8,6 +8,7 @@ class GameWinEffect extends StatefulWidget {
   final String status;
   final int betAmount;
   final int? credit;
+  final bool revealAllowed;
   final Widget child;
 
   const GameWinEffect({
@@ -16,6 +17,7 @@ class GameWinEffect extends StatefulWidget {
     required this.status,
     required this.betAmount,
     required this.credit,
+    this.revealAllowed = true,
     required this.child,
   });
 
@@ -41,7 +43,8 @@ class _GameWinEffectState extends State<GameWinEffect> {
 
   void _announceWinIfReady() {
     final credit = widget.credit;
-    if (widget.status != 'settled' ||
+    if (!widget.revealAllowed ||
+        widget.status != 'settled' ||
         credit == null ||
         announcedRound == widget.roundId) {
       return;
