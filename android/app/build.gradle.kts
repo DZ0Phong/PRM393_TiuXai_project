@@ -1,7 +1,19 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val releaseSigningFile = File(System.getProperty("user.home"), ".prm393/release-signing.properties")
+val releaseSigningProperties = Properties()
+if (releaseSigningFile.isFile) {
+    releaseSigningFile.inputStream().use { releaseSigningProperties.load(it) }
+}
+if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) } && !releaseSigningFile.isFile) {
+    error("Missing release signing configuration: $releaseSigningFile")
 }
 
 android {
@@ -29,10 +41,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningFile.isFile) {
+            create("release") {
+                storeFile = file(releaseSigningProperties.getProperty("storeFile"))
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // No release signing key is kept in Git.
+            if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("release")
         }
     }
 }
