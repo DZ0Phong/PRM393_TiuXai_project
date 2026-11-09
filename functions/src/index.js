@@ -255,7 +255,9 @@ exports.placeBet = call(async (req) => {
     if (u.data().balance < amount) fail('Không đủ điểm');
     const old = b.exists ? b.data() : null;
     if (old && (!old.stakes || !Number.isSafeInteger(old.amount))) fail('Dữ liệu cược cũ không tương thích');
-    if (!old && r.data().betCount >= 100) fail('Phòng tối đa 100 người/phiên');
+    const hasActiveBet = Boolean(old && old.amount > 0);
+    const betCount = Number.isSafeInteger(r.data().betCount) ? r.data().betCount : 0;
+    if (!hasActiveBet && betCount >= 100) fail('Phòng tối đa 100 người/phiên');
     if (game === 'tai_xiu' && old && old.side !== side) fail('Tài Xỉu chỉ được cược cùng một cửa');
     const total = (old?.amount || 0) + amount;
     if (!Number.isSafeInteger(total) || total > 1000000) fail('Tổng cược mỗi người tối đa 1000000');
@@ -272,7 +274,7 @@ exports.placeBet = call(async (req) => {
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);
     tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, acceptedBet: data, at: now()});
-    tx.update(ref, {...stats, betCount: r.data().betCount + (old ? 0 : 1)});
+    tx.update(ref, {...stats, betCount: betCount + (hasActiveBet ? 0 : 1)});
     audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, side, amount});
     return data;
   });
@@ -309,7 +311,11 @@ exports.refundMyBet = call(async (req) => {
     if (!Number.isSafeInteger(balance)) fail('Số dư vượt giới hạn');
     const at = now();
     tx.update(user, {balance});
-    tx.update(ref, stats);
+    const betCount = Number.isSafeInteger(round.data().betCount) ? round.data().betCount : 0;
+    tx.update(ref, {
+      ...stats,
+      betCount: Math.max(0, betCount - (amount > 0 ? 1 : 0)),
+    });
     tx.update(bet, {amount: 0, stakes: {}, side: null, lastAt: at});
     const operation = {kind: 'bet_refund', roundId, delta: amount, balance, at};
     tx.create(op, operation);

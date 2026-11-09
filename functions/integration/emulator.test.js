@@ -170,11 +170,21 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const startingBalance = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
     await Promise.all([p.call('placeBet', refundBet), p.call('placeBet', refundBet)]);
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance - 1000);
+    assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().betCount, 1);
     const refund = {roundId: random.roundId, requestId: 'refund-001'};
     await Promise.all([p.call('refundMyBet', refund), p.call('refundMyBet', refund)]);
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance);
+    assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().betCount, 0);
+    // An idempotent replay must not resurrect a refunded stake or charge again.
     assert.equal((await p.call('placeBet', refundBet)).amount, 1000);
-    await assert.rejects(p.call('placeBet', {...refundBet, side: 'bau'}));
+    assert.equal((await db.doc(`rounds/${random.roundId}/bets/${p.user.uid}`).get()).data().amount, 0);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance);
+    await p.call('placeBet', {...refundBet, requestId: 'refunded-bet-002'});
+    assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().betCount, 1);
+    await p.call('refundMyBet', {roundId: random.roundId, requestId: 'refund-002'});
+    assert.equal((await db.doc(`rounds/${random.roundId}`).get()).data().betCount, 0);
+    await p.call('placeBet', {...refundBet, side: 'bau', requestId: 'refunded-bet-003'});
+    await p.call('refundMyBet', {roundId: random.roundId, requestId: 'refund-003'});
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, startingBalance);
     await db.doc(`rounds/${random.roundId}`).update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
     await p.call('advanceRandomRound', {roundId: random.roundId});
