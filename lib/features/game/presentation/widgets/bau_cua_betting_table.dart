@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/bet_failure_notice.dart';
 import '../../../../core/currency_format.dart';
 import 'game_win_effect.dart';
 
@@ -543,9 +544,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
         if (attemptedSide != null) {
           setState(() => bets[attemptedSide!] = 0);
         }
-        _notice(
-          'Chưa xác nhận được cửa vừa gửi; kiểm tra cược trên máy chủ trước khi chọn lại: $error',
-        );
+        _notice(betFailureNotice(error));
       }
     } finally {
       if (mounted && widget.roundId == roundId) {
@@ -574,7 +573,7 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
       );
     } catch (error) {
       if (mounted && widget.roundId == roundId) {
-        _notice('Chưa hoàn được cược: $error');
+        _notice('Chưa hoàn được cược. ${betFailureNotice(error)}');
       }
     } finally {
       if (mounted && widget.roundId == roundId) {

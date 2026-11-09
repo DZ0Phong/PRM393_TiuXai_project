@@ -427,14 +427,9 @@ class _RoundScreenState extends State<RoundScreen> {
       await _mutationStore.save(_mutationKey, operation);
       if (mounted) setState(() => _pendingMutation = operation);
       await _sendPendingMutation();
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () => message = _pendingMutation == null
-              ? readableError(error)
-              : 'Chưa xác nhận thao tác: ${readableError(error)}',
-        );
-      }
+    } catch (_) {
+      // The betting table reports the failure. Do not duplicate it as a red
+      // page-level error (the pending request is still shown separately).
       rethrow;
     }
   }
@@ -493,7 +488,9 @@ class _RoundScreenState extends State<RoundScreen> {
         );
       }
     } catch (e) {
-      if (mounted) setState(() => message = readableError(e));
+      if (mounted && !rethrowOnError) {
+        setState(() => message = readableError(e));
+      }
       if (rethrowOnError) rethrow;
     } finally {
       if (mounted) setState(() => busy = false);
@@ -1361,7 +1358,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                               secondsLeft: secondsLeft,
                                               balance: balance is int
                                                   ? balance
-                                                  : 0,
+                                                  : null,
                                               enabled:
                                                   !busy &&
                                                   !offline &&

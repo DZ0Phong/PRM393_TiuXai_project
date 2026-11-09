@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../core/bet_failure_notice.dart';
 import '../../../../../core/currency_format.dart';
 import '../game_win_effect.dart';
 
@@ -10,7 +11,7 @@ class XocXocBettingTable extends StatefulWidget {
   final String mode;
   final String status;
   final int secondsLeft;
-  final int balance;
+  final int? balance;
   final bool enabled;
   final List<dynamic>? result;
   final int? confirmedCredit;
@@ -59,14 +60,21 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   int get confirmedTotal =>
       widget.confirmedBets.values.fold(0, (a, b) => a + b);
   int get allInAmount {
-    final available = (widget.balance - total).clamp(0, 1000000);
+    final balance = widget.balance;
+    if (balance == null) return 0;
+    final available = (balance - total).clamp(0, 1000000);
     final limit = 1000000 - confirmedTotal - total;
     final amount = available < limit ? available : limit;
     final valid = amount - amount % 1000;
     return valid >= 1000 ? valid : 0;
   }
 
-  bool get canBet => widget.enabled && !sending;
+  bool get canBet =>
+      widget.enabled &&
+      widget.balance != null &&
+      widget.status == 'open' &&
+      widget.secondsLeft > 0 &&
+      !sending;
 
   @override
   void initState() {
@@ -83,6 +91,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
+      sending = false;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       revealed = true;
@@ -90,15 +99,17 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   }
 
   void _add(String side) {
+    if (!canBet) return;
+    final balance = widget.balance!;
     final amount = allInSelected ? allInAmount : selectedChip;
     final next = total + amount;
     if (amount <= 0) {
       _notice('Số dư khả dụng không đủ để đặt cược.');
       return;
     }
-    if (next > widget.balance || next + confirmedTotal > 1000000) {
+    if (next > balance || next + confirmedTotal > 1000000) {
       _notice(
-        next > widget.balance
+        next > balance
             ? 'Số dư không đủ cho mức cược này.'
             : 'Tổng cược tối đa mỗi phiên là 1.000.000 VNĐ.',
       );
@@ -112,19 +123,42 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   Future<void> _submit() async {
     if (!canBet || total == 0) return;
+    final roundId = widget.roundId;
+    final placeBet = widget.onPlaceBet;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
+    String? attemptedSide;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
-        await widget.onPlaceBet(entry.key, entry.value);
-        if (mounted) setState(() => bets[entry.key] = 0);
+        if (!mounted ||
+            widget.roundId != roundId ||
+            !widget.enabled ||
+            widget.status != 'open' ||
+            widget.secondsLeft <= 0 ||
+            widget.balance == null ||
+            entry.value > widget.balance! ||
+            entry.value + confirmedTotal > 1000000) {
+          break;
+        }
+        attemptedSide = entry.key;
+        await placeBet(entry.key, entry.value);
+        if (!mounted || widget.roundId != roundId) return;
+        setState(() => bets[entry.key] = 0);
+        attemptedSide = null;
       }
     } catch (error) {
-      if (mounted) {
-        _notice('Một số cửa chưa gửi được. Cược đã nhận vẫn được giữ: $error');
+      if (mounted && widget.roundId == roundId) {
+        // A network failure might have reached the server. Do not replay the
+        // attempted gate with a new requestId; only unsent gates remain draft.
+        if (attemptedSide != null) {
+          setState(() => bets[attemptedSide!] = 0);
+        }
+        _notice(betFailureNotice(error));
       }
     } finally {
-      if (mounted) setState(() => sending = false);
+      if (mounted && widget.roundId == roundId) {
+        setState(() => sending = false);
+      }
     }
   }
 
@@ -203,7 +237,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
         const Icon(Icons.toll, color: gold, size: 18),
         const SizedBox(width: 4),
         Text(
-          '${format(widget.balance)} VNĐ',
+          '${widget.balance == null ? '—' : format(widget.balance!)} VNĐ',
           style: const TextStyle(
             color: Color(0xffffddb8),
             fontWeight: FontWeight.bold,
@@ -309,7 +343,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
             ),
             Text(
-              format(widget.balance),
+              widget.balance == null ? '—' : format(widget.balance!),
               style: const TextStyle(
                 color: Color(0xffffddb8),
                 fontWeight: FontWeight.w900,
@@ -372,24 +406,24 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               child: Center(
                 child: revealed && result != null && result.length == 4
                     ? Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 5,
-                  runSpacing: 4,
-                  children: [for (final bit in result) _coin(bit == 1)],
-                )
+                        alignment: WrapAlignment.center,
+                        spacing: 5,
+                        runSpacing: 4,
+                        children: [for (final bit in result) _coin(bit == 1)],
+                      )
                     : const Icon(
-                  Icons.blur_on,
-                  color: Color(0xffffddb8),
-                  size: 42,
-                ),
+                        Icons.blur_on,
+                        color: Color(0xffffddb8),
+                        size: 42,
+                      ),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               revealed
                   ? (result == null
-                  ? 'Chưa có kết quả từ máy chủ.'
-                  : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
+                        ? 'Chưa có kết quả từ máy chủ.'
+                        : 'KẾT QUẢ • ${result.where((bit) => bit == 1).length} ĐỎ / ${result.where((bit) => bit == 0).length} TRẮNG')
                   : open
                   ? 'Bát đang úp • Đặt cửa tự do'
                   : 'ĐANG LẮC • Cược đã khóa',
@@ -596,9 +630,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                 selected: chip == selectedChip,
                 onSelected: canBet
                     ? (_) => setState(() {
-                  selectedChip = chip;
-                  allInSelected = false;
-                })
+                        selectedChip = chip;
+                        allInSelected = false;
+                      })
                     : null,
                 selectedColor: gold,
                 backgroundColor: const Color(0xff32353c),
@@ -660,21 +694,24 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     decoration: _panel(),
     child: Column(
       children: [
-        ListTile(
-          leading: const Icon(Icons.verified_user, color: gold),
-          title: const Text(
-            'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
-            style: TextStyle(
-              color: Color(0xffe1e2eb),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+        Material(
+          color: Colors.transparent,
+          child: ListTile(
+            leading: const Icon(Icons.verified_user, color: gold),
+            title: const Text(
+              'QUY TẮC PHÒNG CHƠI OBSIDIAN VIP',
+              style: TextStyle(
+                color: Color(0xffe1e2eb),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            trailing: Icon(
+              rulesOpen ? Icons.expand_less : Icons.expand_more,
+              color: gold,
+            ),
+            onTap: () => setState(() => rulesOpen = !rulesOpen),
           ),
-          trailing: Icon(
-            rulesOpen ? Icons.expand_less : Icons.expand_more,
-            color: gold,
-          ),
-          onTap: () => setState(() => rulesOpen = !rulesOpen),
         ),
         if (rulesOpen)
           const Padding(
@@ -798,9 +835,9 @@ class _XocXocRoad extends StatelessWidget {
   );
 
   Widget _roadCell(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      bool newest,
-      ) {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    bool newest,
+  ) {
     final row = doc.data();
     final side = (row['outcome'] as Map?)?['side']?.toString();
     return Tooltip(

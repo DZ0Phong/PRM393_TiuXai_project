@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 // ignore: depend_on_referenced_packages
 import 'package:firebase_core_platform_interface/test.dart';
@@ -21,8 +22,9 @@ void main() {
     required Future<void> Function(String, int) place,
     Future<void> Function()? refund,
     bool xocXoc = false,
-    int balance = 50000,
+    int? balance = 50000,
     bool enabled = true,
+    int secondsLeft = 30,
     Map<String, int> confirmed = const {},
   }) async {
     tester.view.physicalSize = const Size(1000, 2400);
@@ -36,7 +38,7 @@ void main() {
                     mode: 'quick',
                     roundId: roundId,
                     status: 'open',
-                    secondsLeft: 30,
+                    secondsLeft: secondsLeft,
                     balance: balance,
                     enabled: enabled,
                     result: null,
@@ -46,8 +48,8 @@ void main() {
                 : BauCuaBettingTable(
                     roundId: roundId,
                     status: 'open',
-                    secondsLeft: 30,
-                    balance: balance,
+                    secondsLeft: secondsLeft,
+                    balance: balance ?? 0,
                     enabled: enabled,
                     confirmedBets: confirmed,
                     onPlaceBet: place,
@@ -219,6 +221,106 @@ void main() {
     expect(calls, ['nai:10000']);
   });
 
+  testWidgets('Xóc Xóc does not show a fabricated zero while wallet loads', (
+    tester,
+  ) async {
+    var calls = 0;
+    await showTable(
+      tester,
+      roundId: 'one',
+      place: (_, _) async => calls++,
+      xocXoc: true,
+      balance: null,
+    );
+    expect(find.text('— VNĐ'), findsOneWidget);
+    expect(find.text('0 VNĐ'), findsNothing);
+    await tapLabel(tester, 'CHẴN');
+    expect(calls, 0);
+  });
+
+  testWidgets('Xóc Xóc deadline rejection is concise and stops other gates', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    await showTable(
+      tester,
+      roundId: 'one',
+      place: (side, amount) async {
+        calls.add('$side:$amount');
+        throw FirebaseFunctionsException(
+          code: 'failed-precondition',
+          message: 'Đã khóa cược',
+        );
+      },
+      xocXoc: true,
+    );
+    await tapLabel(tester, 'CHẴN');
+    await tapLabel(tester, 'LẺ');
+    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
+    await tester.pump();
+    expect(calls, ['chan:10000']);
+    expect(
+      find.text('Đã khóa cược. Cược đã nhận vẫn được giữ.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('firebase_functions/'), findsNothing);
+  });
+
+  testWidgets('Bầu Cua deadline rejection shows no exception stack', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    await showTable(
+      tester,
+      roundId: 'one',
+      place: (side, amount) async {
+        calls.add('$side:$amount');
+        throw FirebaseFunctionsException(
+          code: 'failed-precondition',
+          message: 'Đã khóa cược',
+        );
+      },
+    );
+    await tapLabel(tester, 'HƯƠU');
+    await tapLabel(tester, 'BẦU');
+    await tapLabel(tester, 'XÁC NHẬN');
+    await tester.pump();
+    expect(calls, ['nai:10000']);
+    expect(
+      find.text('Đã khóa cược. Cược đã nhận vẫn được giữ.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('firebase_functions/'), findsNothing);
+  });
+
+  testWidgets('Xóc Xóc deadline stops remaining multi-gate batch', (
+    tester,
+  ) async {
+    final first = Completer<void>();
+    final calls = <String>[];
+    Future<void> place(String side, int amount) {
+      calls.add('$side:$amount');
+      return first.future;
+    }
+
+    await showTable(tester, roundId: 'one', place: place, xocXoc: true);
+    await tapLabel(tester, 'CHẴN');
+    await tapLabel(tester, 'LẺ');
+    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
+    expect(calls, ['chan:10000']);
+    await showTable(
+      tester,
+      roundId: 'one',
+      place: place,
+      xocXoc: true,
+      secondsLeft: 0,
+      enabled: false,
+    );
+    first.complete();
+    await tester.pump();
+    expect(calls, ['chan:10000']);
+  });
+
   testWidgets('Xóc Xóc reconnect stops batch and retains unsent gate', (
     tester,
   ) async {
@@ -232,7 +334,7 @@ void main() {
     await showTable(tester, roundId: 'one', place: place, xocXoc: true);
     await tapLabel(tester, 'CHẴN');
     await tapLabel(tester, 'LẺ');
-    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 XU');
+    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
     await showTable(
       tester,
       roundId: 'one',
@@ -244,7 +346,7 @@ void main() {
     await tester.pump();
     expect(calls, ['chan:10000']);
     await showTable(tester, roundId: 'one', place: place, xocXoc: true);
-    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 10.000 XU');
+    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 10.000 VNĐ');
     await tester.pump();
     expect(calls, ['chan:10000', 'le:10000']);
   });
