@@ -96,7 +96,7 @@ exports.touchGameRoom = call(async (req) => {
   const profile = req.profile;
   active(profile);
   await db.doc(`rooms/${game}/members/${req.auth.uid}`).set({
-    nickname: profile.data().nickname || `Bạn ${req.auth.uid.slice(0, 6)}`,
+    nickname: profile.data().nickname || req.auth.token.email?.split('@')[0] || 'Người chơi',
     lastSeen: now(),
   });
   return ensureAutomaticRound(game, req.auth.uid);
@@ -136,9 +136,16 @@ exports.getLeaderboard = call(async (req) => {
 exports.ensureProfile = call(async (req) => {
   const ref = db.doc(`users/${req.auth.uid}`);
   const startingBalance = 100000;
+  const emailName = req.auth.token.email?.split('@')[0];
   await db.runTransaction(async (tx) => {
-    if ((await tx.get(ref)).exists) return;
-    tx.create(ref, {balance: startingBalance, blocked: false, createdAt: now()});
+    const profile = await tx.get(ref);
+    if (profile.exists) {
+      if (emailName && (typeof profile.data().nickname !== 'string' || !profile.data().nickname.trim())) {
+        tx.update(ref, {nickname: emailName});
+      }
+      return;
+    }
+    tx.create(ref, {balance: startingBalance, ...(emailName ? {nickname: emailName} : {}), blocked: false, createdAt: now()});
     tx.create(ref.collection('operations').doc('welcome'), {kind: 'welcome', delta: startingBalance, balance: startingBalance, at: now()});
     audit(tx, req.auth.uid, 'WELCOME', {amount: startingBalance});
   });
@@ -273,7 +280,7 @@ exports.placeBet = call(async (req) => {
     if (!(old?.stakes?.[side] > 0)) stats.playerCounts[side] = (stats.playerCounts[side] || 0) + 1;
     const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? side : null, amount: total,
       stakes: {...(old?.stakes || {}), [side]: (old?.stakes?.[side] || 0) + amount},
-      nickname: u.data().nickname || `Bạn ${req.auth.uid.slice(0, 6)}`,
+      nickname: u.data().nickname || req.auth.token.email?.split('@')[0] || 'Người chơi',
       at: old?.at || now(), lastAt: now()};
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);

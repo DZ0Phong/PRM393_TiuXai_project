@@ -33,7 +33,6 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyState extends State<LobbyScreen> {
   late Future<bool> profile = _loadProfile();
   int selectedCategory = 0;
-  int selectedNav = 0;
   bool showWinToast = true;
   Timer? toastTimer;
   final jackpot = ValueNotifier<int>(3482910450);
@@ -105,6 +104,50 @@ class _LobbyState extends State<LobbyScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Coming soon')));
+  }
+
+  void _showUnavailableNav() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Mục này chưa có chức năng trong phiên bản mô phỏng.'),
+      ),
+    );
+  }
+
+  Widget _navButton(
+    IconData icon,
+    String label, {
+    bool prominent = false,
+    bool selected = false,
+    required VoidCallback onTap,
+  }) {
+    final color = prominent ? const Color(0xffffc174) : const Color(0xff8f8275);
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 24, color: color),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: prominent ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -520,40 +563,45 @@ class _LobbyState extends State<LobbyScreen> {
         );
       },
     ),
-    bottomNavigationBar: NavigationBar(
-      backgroundColor: const Color(0xff0b0e14),
-      indicatorColor: const Color(0x33ffc174),
-      selectedIndex: selectedNav,
-      onDestinationSelected: (index) {
-        setState(() => selectedNav = index);
-        if (index == 4) _openProfile();
-        if (index == 1 || index == 2 || index == 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Mục này chưa có chức năng trong phiên bản mô phỏng.'),
+    bottomNavigationBar: SafeArea(
+      top: false,
+      child: Container(
+        height: 66,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        color: const Color(0xff0b0e14),
+        child: Row(
+          children: [
+            _navButton(
+              Icons.casino,
+              'Sảnh Game',
+              prominent: true,
+              selected: true,
+              onTap: () {},
             ),
-          );
-        }
-      },
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.casino), label: 'Sảnh Game'),
-        NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet),
-          label: 'Nạp Rút',
+            _navButton(
+              Icons.account_balance_wallet,
+              'Nạp Rút',
+              onTap: _showUnavailableNav,
+            ),
+            _navButton(
+              Icons.card_giftcard,
+              'Sự Kiện',
+              onTap: _showUnavailableNav,
+            ),
+            _navButton(
+              Icons.workspace_premium,
+              'VIP Club',
+              onTap: _showUnavailableNav,
+            ),
+            _navButton(
+              Icons.manage_accounts,
+              'Cá Nhân',
+              prominent: true,
+              onTap: _openProfile,
+            ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.card_giftcard),
-          label: 'Sự Kiện',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.workspace_premium),
-          label: 'VIP Club',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.manage_accounts),
-          label: 'Cá Nhân',
-        ),
-      ],
+      ),
     ),
   );
 }

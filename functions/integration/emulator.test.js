@@ -96,11 +96,19 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     const boss = await client(0); await adminAuth(app).setCustomUserClaims(boss.user.uid, {admin: true}); await boss.user.getIdToken(true); await boss.call('ensureProfile');
     const p = await client(1); await p.call('ensureProfile');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 100000);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().nickname, p.user.email.split('@')[0]);
     const welcome = (await db.doc(`users/${p.user.uid}/operations/welcome`).get()).data();
     assert.equal(welcome.delta, 100000); assert.equal(welcome.balance, 100000);
     await p.call('ensureProfile');
     assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().balance, 100000);
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().nickname, p.user.email.split('@')[0]);
     assert.equal((await db.collection(`users/${p.user.uid}/operations`).where('kind', '==', 'welcome').get()).size, 1);
+    const legacy = await client(91);
+    await db.doc(`users/${legacy.user.uid}`).set({balance: 10000, blocked: false});
+    await legacy.call('ensureProfile');
+    assert.equal((await db.doc(`users/${legacy.user.uid}`).get()).data().balance, 10000);
+    assert.equal((await db.doc(`users/${legacy.user.uid}`).get()).data().nickname, legacy.user.email.split('@')[0]);
+    assert.equal((await db.doc(`users/${legacy.user.uid}/operations/welcome`).get()).exists, false);
     const joined = await p.call('touchGameRoom', {game: 'tai_xiu'});
     assert.equal((await db.doc(`rooms/tai_xiu/members/${p.user.uid}`).get()).exists, true);
     await p.call('leaveGameRoom', {game: 'tai_xiu'});
@@ -234,8 +242,11 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
     await seedBots.commit();
     const ranking = await p.call('getLeaderboard');
     const playerBalance = (await db.doc(`users/${p.user.uid}`).get()).data().balance;
-    assert.ok(ranking.some((row) => row.balance === playerBalance));
+    assert.ok(ranking.some((row) => row.balance === playerBalance && row.nickname === p.user.email.split('@')[0]));
     assert.ok(ranking.every((row) => row.balance < 199896));
+    await p.call('updateMyProfile', {nickname: 'Tôi đã đổi tên'});
+    await p.call('ensureProfile');
+    assert.equal((await db.doc(`users/${p.user.uid}`).get()).data().nickname, 'Tôi đã đổi tên');
 
     const balanceRound = await boss.call('startRound', {game: 'tai_xiu', mode: 'admin'});
     await p.call('placeBet', {roundId: balanceRound.roundId, side: 'tai', amount: 5000, requestId: 'balance-tai'});
