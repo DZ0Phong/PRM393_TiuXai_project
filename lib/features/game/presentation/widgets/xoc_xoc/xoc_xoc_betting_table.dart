@@ -13,6 +13,7 @@ class XocXocBettingTable extends StatefulWidget {
   final int secondsLeft;
   final int? balance;
   final bool enabled;
+  final bool offline;
   final List<dynamic>? result;
   final int? confirmedCredit;
   final Map<String, int> confirmedBets;
@@ -26,6 +27,7 @@ class XocXocBettingTable extends StatefulWidget {
     required this.secondsLeft,
     required this.balance,
     required this.enabled,
+    this.offline = false,
     required this.result,
     this.confirmedCredit,
     this.confirmedBets = const {},
@@ -49,6 +51,8 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   ];
 
   final bets = <String, int>{for (final gate in gates) gate.$1: 0};
+  final acknowledgedBets = <String, int>{};
+  int? lastKnownBalance;
   int selectedChip = 10000;
   bool allInSelected = false;
   bool sending = false;
@@ -57,8 +61,17 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   int get total =>
       bets.values.fold(0, (accumulated, value) => accumulated + value);
-  int get confirmedTotal =>
-      widget.confirmedBets.values.fold(0, (a, b) => a + b);
+  int confirmed(String side) {
+    final server = widget.confirmedBets[side] ?? 0;
+    final acknowledged = acknowledgedBets[side] ?? 0;
+    return server > acknowledged ? server : acknowledged;
+  }
+
+  int get confirmedTotal => gates.fold(
+    0,
+    (totalConfirmed, gate) => totalConfirmed + confirmed(gate.$1),
+  );
+  int? get displayBalance => widget.balance ?? lastKnownBalance;
   int get allInAmount {
     final balance = widget.balance;
     if (balance == null) return 0;
@@ -80,6 +93,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   void initState() {
     super.initState();
     revealed = widget.status == 'settled';
+    lastKnownBalance = widget.balance;
   }
 
   String format(int value) => formatCurrencyAmount(value);
@@ -87,7 +101,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   @override
   void didUpdateWidget(covariant XocXocBettingTable oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.balance != null) lastKnownBalance = widget.balance;
     if (oldWidget.roundId != widget.roundId) {
+      acknowledgedBets.clear();
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
@@ -123,28 +139,44 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   Future<void> _submit() async {
     if (!canBet || total == 0) return;
+    if (total > widget.balance! || total + confirmedTotal > 1000000) {
+      _notice('Số dư hoặc hạn mức cược đã thay đổi; hãy xóa cược chưa gửi.');
+      return;
+    }
     final roundId = widget.roundId;
     final placeBet = widget.onPlaceBet;
     final selected = bets.entries.where((entry) => entry.value > 0).toList();
     String? attemptedSide;
+    var sent = 0;
     setState(() => sending = true);
     try {
       for (final entry in selected) {
         if (!mounted ||
             widget.roundId != roundId ||
-            !widget.enabled ||
+            widget.offline ||
             widget.status != 'open' ||
-            widget.secondsLeft <= 0 ||
-            widget.balance == null ||
-            entry.value > widget.balance! ||
-            entry.value + confirmedTotal > 1000000) {
+            widget.secondsLeft <= 0) {
           break;
         }
         attemptedSide = entry.key;
+        final before = confirmed(entry.key);
         await placeBet(entry.key, entry.value);
         if (!mounted || widget.roundId != roundId) return;
-        setState(() => bets[entry.key] = 0);
+        setState(() {
+          // Keep the accepted gate visible until the Firestore bet snapshot arrives.
+          final acknowledged = before + entry.value;
+          if (acknowledged > confirmed(entry.key)) {
+            acknowledgedBets[entry.key] = acknowledged;
+          }
+          bets[entry.key] = 0;
+        });
+        sent++;
         attemptedSide = null;
+      }
+      if (mounted && widget.roundId == roundId && sent < selected.length) {
+        _notice(
+          'Đã nhận $sent/${selected.length} cửa; các cửa còn lại chưa gửi.',
+        );
       }
     } catch (error) {
       if (mounted && widget.roundId == roundId) {
@@ -188,6 +220,13 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
           _chipSelector(),
           const SizedBox(height: 8),
           _confirmButton(),
+          if (total > 0)
+            TextButton(
+              onPressed: sending
+                  ? null
+                  : () => setState(() => bets.updateAll((_, _) => 0)),
+              child: const Text('Xóa cược chưa gửi'),
+            ),
           const SizedBox(height: 8),
           _road(),
           const SizedBox(height: 8),
@@ -237,7 +276,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
         const Icon(Icons.toll, color: gold, size: 18),
         const SizedBox(width: 4),
         Text(
-          '${widget.balance == null ? '—' : format(widget.balance!)} VNĐ',
+          displayBalance == null
+              ? 'Đang tải số dư'
+              : '${format(displayBalance!)} VNĐ',
           style: const TextStyle(
             color: Color(0xffffddb8),
             fontWeight: FontWeight.bold,
@@ -343,7 +384,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
             ),
             Text(
-              widget.balance == null ? '—' : format(widget.balance!),
+              displayBalance == null
+                  ? 'Đang tải số dư'
+                  : format(displayBalance!),
               style: const TextStyle(
                 color: Color(0xffffddb8),
                 fontWeight: FontWeight.w900,
@@ -507,8 +550,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   );
 
   Widget _gate((String, String, String, String) gate) {
-    final amount = bets[gate.$1]! + (widget.confirmedBets[gate.$1] ?? 0);
-    final selected = amount > 0;
+    final accepted = confirmed(gate.$1);
+    final draft = bets[gate.$1]!;
+    final selected = accepted + draft > 0;
     final color = gate.$1 == 'chan' || gate.$1 == 'red3' || gate.$1 == 'red4'
         ? const Color(0xffb4232d)
         : const Color(0xff32353c);
@@ -573,7 +617,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
               ),
               const SizedBox(height: 3),
               Text(
-                'Cược: ${format(amount)} VNĐ',
+                'Đã cược: ${format(accepted)} VNĐ',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -582,6 +626,13 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
                   fontSize: 10,
                 ),
               ),
+              if (draft > 0)
+                Text(
+                  'Chưa gửi: ${format(draft)} VNĐ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xffd8c3ad), fontSize: 9),
+                ),
             ],
           ),
         ),
@@ -674,7 +725,13 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   };
 
   Widget _confirmButton() => FilledButton.icon(
-    onPressed: canBet && total > 0 ? _submit : null,
+    onPressed:
+        canBet &&
+            total > 0 &&
+            total <= widget.balance! &&
+            total + confirmedTotal <= 1000000
+        ? _submit
+        : null,
     icon: const Icon(Icons.verified_outlined),
     label: Text(
       sending ? 'ĐANG GỬI...' : 'XÁC NHẬN CƯỢC • ${format(total)} VNĐ',

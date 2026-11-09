@@ -24,6 +24,7 @@ void main() {
     bool xocXoc = false,
     int? balance = 50000,
     bool enabled = true,
+    bool offline = false,
     int secondsLeft = 30,
     Map<String, int> confirmed = const {},
   }) async {
@@ -41,6 +42,7 @@ void main() {
                     secondsLeft: secondsLeft,
                     balance: balance,
                     enabled: enabled,
+                    offline: offline,
                     result: null,
                     confirmedBets: confirmed,
                     onPlaceBet: place,
@@ -123,7 +125,7 @@ void main() {
     await tapLabel(tester, 'BẦU');
     pending.complete();
     await tester.pump();
-    expect(find.text('Cược: 10.000'), findsOneWidget);
+    expect(find.textContaining('Cược: 10.000'), findsOneWidget);
   });
 
   testWidgets(
@@ -232,11 +234,91 @@ void main() {
       xocXoc: true,
       balance: null,
     );
-    expect(find.text('— VNĐ'), findsOneWidget);
+    expect(find.text('Đang tải số dư'), findsWidgets);
     expect(find.text('0 VNĐ'), findsNothing);
     await tapLabel(tester, 'CHẴN');
     expect(calls, 0);
   });
+
+  testWidgets(
+    'Xóc Xóc sends four gates despite its own transient busy rebuild',
+    (tester) async {
+      final first = Completer<void>();
+      final calls = <String>[];
+      Future<void> place(String side, int amount) {
+        calls.add('$side:$amount');
+        return calls.length == 1 ? first.future : Future.value();
+      }
+
+      await showTable(tester, roundId: 'one', place: place, xocXoc: true);
+      for (final side in ['CHẴN', 'LẺ', '3 ĐỎ 1 TRẮNG', '3 TRẮNG 1 ĐỎ']) {
+        await tapLabel(tester, side);
+      }
+      await tapLabel(tester, 'XÁC NHẬN CƯỢC • 40.000 VNĐ');
+      expect(calls, ['chan:10000']);
+
+      // RoundScreen briefly disables inputs and lacks a wallet snapshot while
+      // the first callable is pending; this is not a rejection of other gates.
+      await showTable(
+        tester,
+        roundId: 'one',
+        place: place,
+        xocXoc: true,
+        balance: null,
+        enabled: false,
+      );
+      first.complete();
+      await tester.pump();
+      expect(calls, ['chan:10000', 'le:10000', 'red3:10000', 'white3:10000']);
+      expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNWidgets(4));
+      expect(find.textContaining('Chưa gửi: 10.000 VNĐ'), findsNothing);
+      expect(find.text('50.000 VNĐ'), findsOneWidget);
+
+      // A delayed Firestore snapshot must not drop or double-count receipts.
+      await showTable(
+        tester,
+        roundId: 'one',
+        place: place,
+        xocXoc: true,
+        balance: 10000,
+        confirmed: const {'chan': 10000},
+      );
+      expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNWidgets(4));
+      expect(find.textContaining('Đã cược: 20.000 VNĐ'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Xóc Xóc rejects a later gate without claiming four were charged',
+    (tester) async {
+      final calls = <String>[];
+      await showTable(
+        tester,
+        roundId: 'one',
+        xocXoc: true,
+        place: (side, amount) async {
+          calls.add('$side:$amount');
+          if (side == 'le')
+            throw FirebaseFunctionsException(
+              code: 'failed-precondition',
+              message: 'Đã khóa cược',
+            );
+        },
+      );
+      for (final side in ['CHẴN', 'LẺ', '3 ĐỎ 1 TRẮNG', '3 TRẮNG 1 ĐỎ']) {
+        await tapLabel(tester, side);
+      }
+      await tapLabel(tester, 'XÁC NHẬN CƯỢC • 40.000 VNĐ');
+      await tester.pump();
+      expect(calls, ['chan:10000', 'le:10000']);
+      expect(find.text('Đã cược: 10.000 VNĐ'), findsOneWidget);
+      expect(find.text('Chưa gửi: 10.000 VNĐ'), findsNWidgets(2));
+      expect(
+        find.text('Đã khóa cược. Cược đã nhận vẫn được giữ.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('Xóc Xóc deadline rejection is concise and stops other gates', (
     tester,
@@ -341,6 +423,7 @@ void main() {
       place: place,
       xocXoc: true,
       enabled: false,
+      offline: true,
     );
     pending.complete();
     await tester.pump();

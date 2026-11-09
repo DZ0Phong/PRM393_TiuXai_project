@@ -249,6 +249,44 @@ test('callable: ba trò, quyền admin, khóa, chốt/hoàn retry, ledger', asyn
   } finally { await Promise.all(apps.map(deleteApp)); }
 });
 
+test('Xóc Xóc four gates each debit once and preserve separate stakes', async () => {
+  const app = adminApp({projectId}, `xoc-four-${Date.now()}`);
+  const db = getFirestore(app); const clients = [];
+  async function client(label) {
+    const instance = initializeApp({projectId, apiKey: 'demo-key', appId: 'demo'}, `xoc-${label}-${Date.now()}`);
+    clients.push(instance);
+    const auth = getAuth(instance);
+    connectAuthEmulator(auth, `http://127.0.0.1:${authPort}`, {disableWarnings: true});
+    const functions = getFunctions(instance, 'asia-southeast1');
+    connectFunctionsEmulator(functions, '127.0.0.1', functionsPort);
+    const {user} = await createUserWithEmailAndPassword(auth, `xoc-${label}-${Date.now()}@example.com`, 'password123');
+    return {user, call: async (name, data = {}) => (await httpsCallable(functions, name)(data)).data};
+  }
+  try {
+    const admin = await client('admin');
+    await adminAuth(app).setCustomUserClaims(admin.user.uid, {admin: true});
+    await admin.user.getIdToken(true);
+    await admin.call('ensureProfile');
+    const player = await client('player');
+    await player.call('ensureProfile');
+    const {roundId} = await admin.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
+    const sides = ['chan', 'le', 'red3', 'white3'];
+    for (const [index, side] of sides.entries()) {
+      const input = {roundId, side, amount: 1000, requestId: `xoc-four-${index}`};
+      await player.call('placeBet', input);
+      await player.call('placeBet', input); // same requestId must not debit twice
+      assert.equal((await db.doc(`users/${player.user.uid}`).get()).data().balance, 10000 - 1000 * (index + 1));
+    }
+    const bet = (await db.doc(`rounds/${roundId}/bets/${player.user.uid}`).get()).data();
+    assert.equal(bet.amount, 4000);
+    assert.deepEqual(bet.stakes, Object.fromEntries(sides.map(side => [side, 1000])));
+    const operations = await db.collection(`users/${player.user.uid}/operations`).get();
+    assert.equal(operations.docs.filter(row => row.data().kind === 'bet' && row.data().roundId === roundId).length, 4);
+    await admin.call('cancelRound', {roundId, reason: 'Kết thúc kiểm thử bốn cửa'});
+    assert.equal((await db.doc(`users/${player.user.uid}`).get()).data().balance, 10000);
+  } finally { await Promise.all(clients.map(deleteApp)); await deleteApp(app); }
+});
+
 test('callable player management: point adjustment, account lock and audit', async () => {
   const app = adminApp({projectId}, `player-management-${Date.now()}`);
   const db = getFirestore(app);

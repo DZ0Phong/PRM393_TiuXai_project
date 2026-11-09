@@ -1367,6 +1367,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                                   currentBet.hasData &&
                                                   _pendingLoaded &&
                                                   _pendingMutation == null,
+                                              offline: offline,
                                               result: round['result'] is List
                                                   ? round['result'] as List
                                                   : null,
