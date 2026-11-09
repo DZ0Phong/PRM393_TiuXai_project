@@ -44,7 +44,7 @@
    ```
 
    Android Studio Run configuration: Additional run args tương tự. Muốn build APK debug riêng cho nhóm: `flutter build apk --debug --dart-define=EMULATORS=false --dart-define=BACKEND_URL=https://ten-may.ten-tailnet.ts.net`; APK trong `build/app/outputs/flutter-apk/app-debug.apk`. Đây là **debug APK**, không phải release ký. Link backend được nhúng trong APK, nhưng không chứa private key; mọi lệnh cần Firebase ID token và server kiểm quyền.
-3. Kiểm hai user trên **hai máy**: đăng ký → lobby/ví 10.000 → cùng Tài/Xỉu thấy một `roundId` → cả hai cược → admin chọn (hoặc random) → hết 30 giây cùng thấy kết quả/ledger; kiểm Bầu Cua/Xóc Xóc/Poker/Ba Cây tương tự. Kiểm player gọi lệnh admin bị từ chối. Tắt host vài phút rồi bật lại để kiểm reconnect; không cược khi host offline.
+3. Kiểm hai user trên **hai máy**: đăng ký → lobby/ví 100.000 → cùng Tài/Xỉu thấy một `roundId` → cả hai cược → admin chọn (hoặc random) → hết 30 giây cùng thấy kết quả/ledger; kiểm Bầu Cua/Xóc Xóc/Poker/Ba Cây tương tự. Kiểm player gọi lệnh admin bị từ chối. Tắt host vài phút rồi bật lại để kiểm reconnect; không cược khi host offline.
 
 ## Giới hạn/an toàn
 

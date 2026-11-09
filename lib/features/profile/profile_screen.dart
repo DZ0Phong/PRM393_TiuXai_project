@@ -814,7 +814,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   onPressed: () => _showInfoDialog(
                     'Nhận Điểm Tân Thủ',
-                    'Tài khoản mới tự động nhận 10.000 VNĐ mô phỏng. Nếu hết điểm, hãy liên hệ Admin hoặc thực hiện nhiệm vụ.',
+                    'Tài khoản mới tự động nhận 100.000 VNĐ mô phỏng. Nếu hết điểm, hãy liên hệ Admin hoặc thực hiện nhiệm vụ.',
                   ),
                   icon: const Icon(Icons.add_circle, size: 18),
                   label: const Text(

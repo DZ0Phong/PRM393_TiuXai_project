@@ -135,11 +135,12 @@ exports.getLeaderboard = call(async (req) => {
 
 exports.ensureProfile = call(async (req) => {
   const ref = db.doc(`users/${req.auth.uid}`);
+  const startingBalance = 100000;
   await db.runTransaction(async (tx) => {
     if ((await tx.get(ref)).exists) return;
-    tx.create(ref, {balance: 10000, blocked: false, createdAt: now()});
-    tx.create(ref.collection('operations').doc('welcome'), {kind: 'welcome', delta: 10000, balance: 10000, at: now()});
-    audit(tx, req.auth.uid, 'WELCOME', {amount: 10000});
+    tx.create(ref, {balance: startingBalance, blocked: false, createdAt: now()});
+    tx.create(ref.collection('operations').doc('welcome'), {kind: 'welcome', delta: startingBalance, balance: startingBalance, at: now()});
+    audit(tx, req.auth.uid, 'WELCOME', {amount: startingBalance});
   });
   return {ok: true};
 });
