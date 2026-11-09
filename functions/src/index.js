@@ -125,7 +125,10 @@ exports.getLeaderboard = call(async (req) => {
     cursor = snapshot.docs.at(-1);
   }
   return people.slice(0, 20).map((doc, i) => ({
-    rank: i + 1, nickname: `Bạn ${doc.id.slice(0, 6)}`,
+    rank: i + 1,
+    nickname: typeof doc.data().nickname === 'string' && doc.data().nickname.trim()
+      ? doc.data().nickname.trim()
+      : 'Người chơi',
     balance: doc.data().balance,
   }));
 });
