@@ -162,7 +162,10 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
         _ => true,
       };
       return matchesStatus &&
-          (query.isEmpty || doc.uid.toLowerCase().contains(query));
+          (query.isEmpty ||
+              doc.uid.toLowerCase().contains(query) ||
+              (data['nickname']?.toString().toLowerCase().contains(query) ??
+                  false));
     }).toList();
   }
 
@@ -220,7 +223,9 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('UID: $_selectedUid'),
-            Text('Hành động: ${signedAmount > 0 ? '+' : ''}${formatCurrencyAmount(signedAmount)} VNĐ'),
+            Text(
+              'Hành động: ${signedAmount > 0 ? '+' : ''}${formatCurrencyAmount(signedAmount)} VNĐ',
+            ),
             Text(
               'Số dư dự kiến: ${formatCurrencyAmount(((_selectedUser?['balance'] as num? ?? 0) + signedAmount).toInt())} VNĐ',
             ),
@@ -367,10 +372,6 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
     }
   }
 
-  String _shortUid(String uid) => uid.length > 18
-      ? '${uid.substring(0, 8)}…${uid.substring(uid.length - 6)}'
-      : uid;
-
   Widget _chip(String id, String label) {
     final selected = _statusFilter == id;
     return ChoiceChip(
@@ -404,6 +405,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
       );
     }
     final blocked = user['blocked'] == true;
+    final nickname = user['nickname']?.toString().trim() ?? '';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -425,7 +427,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _shortUid(_selectedUid!),
+                  nickname.isEmpty ? 'UID người chơi' : nickname,
                   style: const TextStyle(
                     color: _gold,
                     fontWeight: FontWeight.bold,
@@ -443,7 +445,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
           ),
           const SizedBox(height: 5),
           SelectableText(
-            _selectedUid!,
+            'UID: $_selectedUid',
             style: const TextStyle(color: _muted, fontSize: 11),
           ),
           if (user['createdAt'] is Timestamp)
@@ -649,13 +651,15 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                         size: 18,
                       ),
                       SizedBox(width: 8),
-                      Text(
-                        'ROLE: ADMIN • PLAYER MANAGEMENT',
-                        style: TextStyle(
-                          color: Color(0xff56e5a9),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
+                      Expanded(
+                        child: Text(
+                          'ROLE: ADMIN • PLAYER MANAGEMENT',
+                          style: TextStyle(
+                            color: Color(0xff56e5a9),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
                     ],
@@ -787,6 +791,7 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                 final data = doc.data;
                 final blocked = data['blocked'] == true;
                 final isBot = data['isBot'] == true;
+                final nickname = data['nickname']?.toString().trim() ?? '';
                 return Card(
                   color: _surface,
                   margin: const EdgeInsets.only(bottom: 6),
@@ -810,14 +815,14 @@ class _PlayerManagementScreenState extends State<PlayerManagementScreen> {
                       ),
                     ),
                     title: Text(
-                      _shortUid(doc.uid),
+                      doc.uid,
                       style: const TextStyle(
                         color: Color(0xffe1e2eb),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
-                      '${data['balance'] is num ? formatCurrencyAmount((data['balance'] as num).toInt()) : '—'} VNĐ • ${blocked ? 'ĐÃ KHÓA' : (isBot ? 'BOT' : 'Hoạt động')}',
+                      '${nickname.isEmpty ? '' : '$nickname • '}${data['balance'] is num ? formatCurrencyAmount((data['balance'] as num).toInt()) : '—'} VNĐ • ${blocked ? 'ĐÃ KHÓA' : (isBot ? 'BOT' : 'Hoạt động')}',
                       style: TextStyle(
                         color: blocked ? const Color(0xffff8e88) : _muted,
                         fontSize: 12,

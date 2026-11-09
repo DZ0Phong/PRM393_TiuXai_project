@@ -32,6 +32,7 @@ class RoundHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (game.id == 'tai_xiu') return const _TaiXiuBeadHistory();
     final limit = game.id == 'tai_xiu'
         ? 125
         : game.id == 'xoc_xoc'
@@ -427,6 +428,151 @@ class RoundHistory extends StatelessWidget {
       ],
     );
   }
+}
+
+/// One settled round on the bead road. Invalid dice are not shown as Xỉu.
+({String mark, int total})? taiXiuBeadResult(Map<String, dynamic> row) {
+  final dice = row['result'];
+  if (dice is! List ||
+      dice.length != 3 ||
+      dice.any(
+        (value) =>
+            value is! num ||
+            !value.isFinite ||
+            value < 1 ||
+            value > 6 ||
+            value != value.toInt(),
+      )) {
+    return null;
+  }
+  final values = dice.cast<num>().map((value) => value.toInt()).toList();
+  final total = values.reduce((a, b) => a + b);
+  return (
+    mark: values[0] == values[1] && values[1] == values[2]
+        ? 'B'
+        : total > 10
+        ? 'T'
+        : 'X',
+    total: total,
+  );
+}
+
+class _TaiXiuBeadHistory extends StatelessWidget {
+  const _TaiXiuBeadHistory();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 10),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xff1a1d23),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xff343740)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Bảng Giọt Nước',
+          style: TextStyle(
+            color: Color(0xffffc174),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 5),
+        const Text(
+          'Mỗi ô là một phiên đã chốt; mới nhất nằm trước.',
+          style: TextStyle(color: Color(0xffa5a6ae), fontSize: 11),
+        ),
+        const SizedBox(height: 14),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('rounds')
+              .where('game', isEqualTo: 'tai_xiu')
+              .where('status', isEqualTo: 'settled')
+              .orderBy('settledAt', descending: true)
+              .limit(30)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Text('Không tải được lịch sử: ${snapshot.error}');
+            }
+            if (!snapshot.hasData) return const LinearProgressIndicator();
+            final rounds = [
+              for (final doc in snapshot.data!.docs)
+                if (taiXiuBeadResult(doc.data()) case final result?)
+                  (
+                    id: doc.id,
+                    dice: doc.data()['result'] as List,
+                    result: result,
+                  ),
+            ];
+            if (rounds.isEmpty) return const Text('Chưa có phiên đã chốt.');
+            return Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final round in rounds)
+                  Tooltip(
+                    message:
+                        'Phiên ${round.id}\n${round.dice.join(' + ')} = ${round.result.total} · ${switch (round.result.mark) {
+                          'T' => 'Tài',
+                          'X' => 'Xỉu',
+                          _ => 'Bão',
+                        }}',
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (switch (round.result.mark) {
+                          'T' => const Color(0xffff8585),
+                          'X' => const Color(0xff71b8ff),
+                          _ => const Color(0xffc7a3ff),
+                        }).withValues(alpha: .12),
+                        border: Border.all(
+                          color: switch (round.result.mark) {
+                            'T' => const Color(0xffff8585),
+                            'X' => const Color(0xff71b8ff),
+                            _ => const Color(0xffc7a3ff),
+                          },
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            round.result.mark,
+                            style: TextStyle(
+                              color: switch (round.result.mark) {
+                                'T' => const Color(0xffff8585),
+                                'X' => const Color(0xff71b8ff),
+                                _ => const Color(0xffc7a3ff),
+                              },
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            '${round.result.total}',
+                            style: const TextStyle(
+                              color: Color(0xffdedfe5),
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 }
 
 String _historyTime(DateTime value) {

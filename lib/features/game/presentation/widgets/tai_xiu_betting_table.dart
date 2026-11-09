@@ -2,7 +2,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/currency_format.dart';
-import '../../detailed_road_screen.dart';
 import 'game_win_effect.dart';
 import 'tai_xiu_dice.dart';
 
@@ -726,20 +725,6 @@ class _TaiXiuBettingTableState extends State<TaiXiuBettingTable> {
                   ],
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const DetailedRoadScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.analytics, size: 16),
-            label: const Text('Soi cầu chi tiết · Giọt Nước & Big Road'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xffd8c3ad),
-              side: const BorderSide(color: Color(0xff534434)),
             ),
           ),
         ],

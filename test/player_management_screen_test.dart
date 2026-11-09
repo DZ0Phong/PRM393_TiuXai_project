@@ -38,12 +38,14 @@ PlayerRecord _player(
   int balance = 20000,
   bool blocked = false,
   bool isBot = false,
+  String nickname = '',
 }) => PlayerRecord(
   uid: uid,
   data: {
     'balance': balance,
     'blocked': blocked,
     'isBot': isBot,
+    'nickname': nickname,
     'createdAt': Timestamp.fromDate(DateTime(2026, 11, 2)),
   },
 );
@@ -129,13 +131,16 @@ Future<void> _select(WidgetTester tester, String uid) async {
 Future<void> _scrollTo(WidgetTester tester, Finder target) async {
   final listView = find.byType(ListView);
   expect(listView, findsOneWidget);
-  final scrollable = find.descendant(
-    of: listView,
-    matching: find.byWidgetPredicate(
-      (widget) =>
-          widget is Scrollable && widget.axisDirection == AxisDirection.down,
-    ),
-  ).first;
+  final scrollable = find
+      .descendant(
+        of: listView,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      )
+      .first;
   await tester.scrollUntilVisible(target, 250, scrollable: scrollable);
 }
 
@@ -173,6 +178,26 @@ void main() {
     expect(find.text('Không tìm thấy người chơi với UID này.'), findsOneWidget);
     await harness.players.close();
   });
+
+  testWidgets(
+    'shows full player UID and nickname before selecting for credit',
+    (tester) async {
+      final harness = _Harness();
+      const uid = 'firebase-auth-user-uid-longer-than-eighteen-characters';
+      final player = _player(uid, nickname: 'Hiep test');
+      harness.players.records[uid] = player;
+      harness.latest.insert(0, player);
+      await _pump(tester, harness);
+      expect(find.text(uid), findsOneWidget);
+      expect(find.textContaining('Hiep test'), findsWidgets);
+      await _select(tester, uid);
+      expect(find.text('UID: $uid'), findsOneWidget);
+      tester.view.physicalSize = const Size(393, 852);
+      await tester.pump();
+
+      await harness.players.close();
+    },
+  );
 
   testWidgets('loads an older player page and reports end of collection', (
     tester,
