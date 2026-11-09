@@ -49,15 +49,6 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
   int? selectedChip;
   bool allInSelected = false;
   bool sending = false;
-  bool invalidCustomAmount = false;
-  final TextEditingController customAmount = TextEditingController(text: '');
-
-  @override
-  void dispose() {
-    customAmount.dispose();
-    super.dispose();
-  }
-
   int get total => bets.values.fold(0, (sum, value) => sum + value);
   int get confirmedTotal =>
       widget.confirmedBets.values.fold(0, (sum, value) => sum + value);
@@ -77,8 +68,6 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
       bets.updateAll((_, _) => 0);
       allInSelected = false;
       selectedChip = null;
-      invalidCustomAmount = false;
-      customAmount.clear();
       sending = false;
     }
     if (oldWidget.status == 'open' && widget.status != 'open') {
@@ -103,16 +92,11 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
 
   void _addBet(String side) {
     if (!canBet) return;
-    final customStake = int.tryParse(customAmount.text.trim()) ?? 0;
-    if ((!allInSelected && invalidCustomAmount) ||
-        (!allInSelected &&
-            (customStake < 1000 ||
-                customStake > 1000000 ||
-                customStake % 100 != 0))) {
-      _notice('Mức cược tối thiểu 1.000 VNĐ và phải là bội số 100.');
+    if (!allInSelected && selectedChip == null) {
+      _notice('Hãy chọn mệnh giá trước khi đặt cược.');
       return;
     }
-    final amount = allInSelected ? allInAmount : customStake;
+    final amount = allInSelected ? allInAmount : selectedChip!;
     if (amount <= 0 ||
         total + confirmedTotal + amount > 1000000 ||
         total + amount > widget.balance) {
@@ -440,19 +424,17 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                                   ? '${value ~/ 1000000}M'
                                   : '${value ~/ 1000}K',
                             ),
-                            selected: selectedChip == value,
+                            selected: !allInSelected && selectedChip == value,
                             onSelected: canBet
                                 ? (_) => setState(() {
                                     selectedChip = value;
                                     allInSelected = false;
-                                    customAmount.text = '$value';
-                                    invalidCustomAmount = false;
                                   })
                                 : null,
                             selectedColor: gold,
                             backgroundColor: const Color(0xff32353c),
                             labelStyle: TextStyle(
-                              color: selectedChip == value
+                              color: !allInSelected && selectedChip == value
                                   ? const Color(0xff2a1700)
                                   : Colors.white,
                               fontWeight: FontWeight.bold,
@@ -483,36 +465,6 @@ class _BauCuaBettingTableState extends State<BauCuaBettingTable> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: customAmount,
-                  enabled: canBet,
-                  keyboardType: TextInputType.number,
-                  onChanged: (text) {
-                    final value = int.tryParse(text);
-                    final valid =
-                        value != null &&
-                        value >= 1000 &&
-                        value <= 1000000 &&
-                        value % 100 == 0;
-                    setState(() {
-                      invalidCustomAmount = !valid;
-                      allInSelected = false;
-                      selectedChip = null;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    labelText:
-                        'Mệnh giá tùy chỉnh (tối thiểu 1.000, bội số 100)',
-                    errorText: invalidCustomAmount
-                        ? 'Số tiền cược không hợp lệ'
-                        : null,
-                    prefixIcon: Icon(Icons.tune, color: gold),
-                    isDense: true,
-                    filled: true,
-                    fillColor: Color(0xff0b0e14),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
                 Row(
                   children: [
                     Expanded(

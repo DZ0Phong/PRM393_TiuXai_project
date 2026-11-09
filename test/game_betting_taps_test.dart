@@ -33,6 +33,7 @@ void main() {
           body: SingleChildScrollView(
             child: xocXoc
                 ? XocXocBettingTable(
+                    mode: 'quick',
                     roundId: roundId,
                     status: 'open',
                     secondsLeft: 30,
@@ -59,6 +60,12 @@ void main() {
   }
 
   Future<void> tapLabel(WidgetTester tester, String label) async {
+    if (find.byType(BauCuaBettingTable).evaluate().isNotEmpty &&
+        ['HƯƠU', 'BẦU', 'GÀ'].contains(label)) {
+      await tester.ensureVisible(find.text('10K'));
+      await tester.tap(find.text('10K'));
+      await tester.pump();
+    }
     await tester.ensureVisible(find.text(label).first);
     await tester.tap(find.text(label).first);
     await tester.pump();
@@ -188,7 +195,7 @@ void main() {
     expect(find.text('Xóa cược chưa gửi'), findsNothing);
   });
 
-  testWidgets('Bầu Cua invalid custom amount does not leak to next round', (
+  testWidgets('Bầu Cua requires chip selection again in a new round', (
     tester,
   ) async {
     final calls = <String>[];
@@ -197,9 +204,15 @@ void main() {
     }
 
     await showTable(tester, roundId: 'one', place: place);
-    await tester.enterText(find.byType(TextField), '123');
+    expect(find.byType(TextField), findsNothing);
+    await tapLabel(tester, '50K');
     await tester.pump();
     await showTable(tester, roundId: 'two', place: place);
+    await tester.ensureVisible(find.text('HƯƠU').first);
+    await tester.tap(find.text('HƯƠU').first);
+    await tester.pump();
+    expect(find.text('Hãy chọn mệnh giá trước khi đặt cược.'), findsOneWidget);
+    expect(calls, isEmpty);
     await tapLabel(tester, 'HƯƠU');
     await tapLabel(tester, 'XÁC NHẬN');
     await tester.pump();
