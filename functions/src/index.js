@@ -247,8 +247,13 @@ exports.startRound = call(async (req) => {
   return {roundId: ref.id};
 });
 
-exports.placeBet = call(async (req) => {
-  const roundId = id(req.data?.roundId), requestId = id(req.data?.requestId), {side, amount} = req.data || {};
+async function placeBets(req, batch) {
+  const roundId = id(req.data?.roundId), requestId = id(req.data?.requestId);
+  const stakes = batch ? req.data?.stakes : {[req.data?.side]: req.data?.amount};
+  if (!stakes || typeof stakes !== 'object' || Array.isArray(stakes) ||
+      Object.keys(stakes).length < 1 || Object.keys(stakes).length > (batch ? 6 : 1))
+    throw new HttpsError('invalid-argument', 'Cược không hợp lệ');
+  const entries = Object.entries(stakes);
   const ref = db.doc(`rounds/${roundId}`), user = db.doc(`users/${req.auth.uid}`), bet = ref.collection('bets').doc(req.auth.uid);
   const op = user.collection('operations').doc(`bet_${roundId}_${requestId}`);
   return db.runTransaction(async (tx) => {
@@ -256,10 +261,17 @@ exports.placeBet = call(async (req) => {
     active(u);
     if (!r.exists) fail('Không có phiên');
     const game = r.data().game;
-    if (!games.validateBet(game, side, amount)) throw new HttpsError('invalid-argument', 'Cược không hợp lệ');
+    if ((batch && game !== 'xoc_xoc') || entries.some(([side, amount]) => !games.validateBet(game, side, amount)))
+      throw new HttpsError('invalid-argument', 'Cược không hợp lệ');
+    const amount = entries.reduce((sum, [, stake]) => sum + stake, 0);
+    if (!Number.isSafeInteger(amount) || amount > 1000000)
+      throw new HttpsError('invalid-argument', 'Cược không hợp lệ');
     if (existing.exists) {
       const old = existing.data();
-      if (old.side !== side || old.stake !== amount) throw new HttpsError('already-exists', 'requestId đã dùng với cược khác');
+      if (batch ? !old.stakes || Object.keys(old.stakes).length !== entries.length ||
+          entries.some(([side, stake]) => old.stakes[side] !== stake) :
+          old.side !== entries[0][0] || old.stake !== amount)
+        throw new HttpsError('already-exists', 'requestId đã dùng với cược khác');
       return old.acceptedBet || b.data(); // Legacy operations predate immutable receipts.
     }
     if (r.data().status !== 'open' || r.data().closesAt.toMillis() <= Date.now()) fail('Đã khóa cược');
@@ -269,27 +281,33 @@ exports.placeBet = call(async (req) => {
     const hasActiveBet = Boolean(old && old.amount > 0);
     const betCount = Number.isSafeInteger(r.data().betCount) ? r.data().betCount : 0;
     if (!hasActiveBet && betCount >= 100) fail('Phòng tối đa 100 người/phiên');
-    if (game === 'tai_xiu' && old && old.side !== side) fail('Tài Xỉu chỉ được cược cùng một cửa');
+    if (game === 'tai_xiu' && old && old.side !== entries[0][0]) fail('Tài Xỉu chỉ được cược cùng một cửa');
     const total = (old?.amount || 0) + amount;
     if (!Number.isSafeInteger(total) || total > 1000000) fail('Tổng cược mỗi người tối đa 1000000');
     const balance = u.data().balance - amount;
     const stats = r.data().totals && r.data().playerCounts
       ? {totals: {...r.data().totals}, playerCounts: {...r.data().playerCounts}}
       : betStatsFromDocs((await tx.get(ref.collection('bets'))).docs, game);
-    stats.totals[side] = (stats.totals[side] || 0) + amount;
-    if (!(old?.stakes?.[side] > 0)) stats.playerCounts[side] = (stats.playerCounts[side] || 0) + 1;
-    const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? side : null, amount: total,
-      stakes: {...(old?.stakes || {}), [side]: (old?.stakes?.[side] || 0) + amount},
+    for (const [side, stake] of entries) {
+      stats.totals[side] = (stats.totals[side] || 0) + stake;
+      if (!(old?.stakes?.[side] > 0)) stats.playerCounts[side] = (stats.playerCounts[side] || 0) + 1;
+    }
+    const data = {uid: req.auth.uid, side: game === 'tai_xiu' ? entries[0][0] : null, amount: total,
+      stakes: {...(old?.stakes || {})},
       nickname: u.data().nickname || req.auth.token.email?.split('@')[0] || 'Người chơi',
       at: old?.at || now(), lastAt: now()};
+    for (const [side, stake] of entries) data.stakes[side] = (data.stakes[side] || 0) + stake;
     tx.update(user, {balance});
     if (b.exists) tx.update(bet, data); else tx.create(bet, data);
-    tx.create(op, {kind: 'bet', game, roundId, side, stake: amount, delta: -amount, balance, acceptedBet: data, at: now()});
+    tx.create(op, {kind: 'bet', game, roundId, ...(batch ? {stakes} : {side: entries[0][0], stake: amount}),
+      delta: -amount, balance, acceptedBet: data, at: now()});
     tx.update(ref, {...stats, betCount: betCount + (hasActiveBet ? 0 : 1)});
-    audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, side, amount});
+    audit(tx, req.auth.uid, 'BET', {game, roundId, requestId, stakes, amount});
     return data;
   });
-});
+}
+exports.placeBet = call((req) => placeBets(req, false));
+exports.placeBets = call((req) => placeBets(req, true));
 
 // Bầu Cua players may return all accepted stakes while betting is open.
 exports.refundMyBet = call(async (req) => {

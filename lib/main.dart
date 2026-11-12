@@ -197,8 +197,15 @@ class _RoundScreenState extends State<RoundScreen> {
   final now = ValueNotifier(DateTime.now());
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _roomStream =
       _watchRoom();
+  int? _lastUserBalance;
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream =
-      FirebaseFirestore.instance.doc('users/${widget.uid}').snapshots();
+      FirebaseFirestore.instance.doc('users/${widget.uid}').snapshots().map((
+        snapshot,
+      ) {
+        final balance = snapshot.data()?['balance'];
+        if (balance is int) _lastUserBalance = balance;
+        return snapshot;
+      });
   String? _observedRoundId;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _roundStream;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _betStream;
@@ -317,6 +324,8 @@ class _RoundScreenState extends State<RoundScreen> {
   final Set<String> _advancingRounds = {};
   final Set<String> _advancedRounds = {};
   final Map<String, DateTime> _lastAdvanceAttempt = {};
+  bool _ensuringNextRound = false;
+  DateTime? _lastNextRoundAttempt;
   final _mutationStore = PendingMutationStore();
   Map<String, dynamic>? _pendingMutation;
   bool _pendingLoaded = false;
@@ -479,12 +488,12 @@ class _RoundScreenState extends State<RoundScreen> {
     });
     try {
       await functions.gameCallable(name).call(data);
-      if (name == 'cancelRound') {
-        unawaited(_ensureNextSessions());
-      }
+      if (name == 'cancelRound') _lastNextRoundAttempt = null;
       if (mounted) {
         setState(
-          () => message = name == 'placeBet' ? null : 'Thao tác đã hoàn tất.',
+          () => message = (name == 'placeBet' || name == 'placeBets')
+              ? null
+              : 'Thao tác đã hoàn tất.',
         );
       }
     } catch (e) {
@@ -497,33 +506,22 @@ class _RoundScreenState extends State<RoundScreen> {
     }
   }
 
-  Future<void> _ensureNextSessions({String? finishedRoundId}) async {
-    // The backend keeps the result visible for six seconds. Request the next
-    // round at the end of that window, then retry briefly if the request or
-    // reveal-window boundary races with the server. This avoids waiting for
-    // the once-per-minute scheduler after a transient failure.
-    await Future<void>.delayed(const Duration(seconds: 6));
-    for (var attempt = 0; attempt < 5; attempt++) {
-      if (!mounted) return;
-      try {
-        final response = await functions.gameCallable('ensureGameRounds').call({
-          'game': widget.game.id,
-        });
-        final data = response.data;
-        final gameState = data is Map ? data[widget.game.id] : null;
-        final nextRoundId = gameState is Map ? gameState['roundId'] : null;
-        if (finishedRoundId == null ||
-            (nextRoundId is String && nextRoundId != finishedRoundId)) {
-          return;
-        }
-      } catch (error) {
-        if (attempt == 4 && mounted) {
-          setState(() => message = readableError(error));
-        }
-      }
-      if (attempt < 4) {
-        await Future<void>.delayed(const Duration(seconds: 1));
-      }
+  Future<void> _ensureNextSession(String finishedRoundId) async {
+    if (_ensuringNextRound) return;
+    final last = _lastNextRoundAttempt;
+    if (last != null && DateTime.now().difference(last).inSeconds < 4) return;
+    _lastNextRoundAttempt = DateTime.now();
+    _ensuringNextRound = true;
+    try {
+      await functions.gameCallable('ensureGameRounds').call({
+        'game': widget.game.id,
+      });
+      // A reveal-window race or transient error is retried by the next tick
+      // while this screen still observes the finished round.
+    } catch (_) {
+      // Scheduler remains the fallback; the client retries in four seconds.
+    } finally {
+      _ensuringNextRound = false;
     }
   }
 
@@ -545,7 +543,6 @@ class _RoundScreenState extends State<RoundScreen> {
       if (data is Map && data['notDue'] == true) return;
       if (data is Map && data['waiting'] == true) return;
       _advancedRounds.add(roundId);
-      await _ensureNextSessions(finishedRoundId: roundId);
     } catch (error) {
       if (mounted) setState(() => message = readableError(error));
     } finally {
@@ -1075,15 +1072,35 @@ class _RoundScreenState extends State<RoundScreen> {
                                           .ceil();
                                 final playerCanAdvance =
                                     status == 'open' || status == 'locked';
-                                if (!widget.isAdmin &&
-                                    playerCanAdvance &&
-                                    deadline != null &&
-                                    !deadline.isAfter(time)) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    _advanceExpiredRandomRound(id);
-                                  });
+                                if (!widget.isAdmin && !offline) {
+                                  if (playerCanAdvance &&
+                                      deadline != null &&
+                                      !deadline.isAfter(time)) {
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (mounted) {
+                                            _advanceExpiredRandomRound(id);
+                                          }
+                                        });
+                                  } else if (status == 'settled' ||
+                                      status == 'cancelled') {
+                                    final finished =
+                                        round['settledAt'] ??
+                                        round['cancelledAt'];
+                                    if (finished is Timestamp &&
+                                        !finished
+                                            .toDate()
+                                            .add(const Duration(seconds: 6))
+                                            .isAfter(time)) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (mounted &&
+                                                _observedRoundId == id) {
+                                              _ensureNextSession(id);
+                                            }
+                                          });
+                                    }
+                                  }
                                 }
                                 return Text(
                                   'Trạng thái: $status • ${seconds == null ? 'Không có hạn cược' : '${seconds < 0 ? 0 : seconds}s'} '
@@ -1351,6 +1368,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                               }
                                             }
                                             return XocXocBettingTable(
+                                              key: ValueKey('xoc_xoc_$id'),
                                               roundId: id,
                                               mode:
                                                   '${round['mode'] ?? 'random'}',
@@ -1358,7 +1376,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                               secondsLeft: secondsLeft,
                                               balance: balance is int
                                                   ? balance
-                                                  : null,
+                                                  : _lastUserBalance,
                                               enabled:
                                                   !busy &&
                                                   !offline &&
@@ -1377,16 +1395,14 @@ class _RoundScreenState extends State<RoundScreen> {
                                                         .toInt()
                                                   : null,
                                               confirmedBets: confirmedBets,
-                                              onPlaceBet: (side, amount) async {
-                                                await _beginRoundMutation(
-                                                  'placeBet',
-                                                  {
-                                                    'roundId': id,
-                                                    'side': side,
-                                                    'amount': amount,
-                                                  },
-                                                );
-                                              },
+                                              onPlaceBets: (stakes) =>
+                                                  _beginRoundMutation(
+                                                    'placeBets',
+                                                    {
+                                                      'roundId': id,
+                                                      'stakes': stakes,
+                                                    },
+                                                  ),
                                             );
                                           },
                                         );

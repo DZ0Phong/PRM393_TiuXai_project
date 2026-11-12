@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../core/bet_failure_notice.dart';
@@ -17,7 +18,7 @@ class XocXocBettingTable extends StatefulWidget {
   final List<dynamic>? result;
   final int? confirmedCredit;
   final Map<String, int> confirmedBets;
-  final Future<void> Function(String side, int amount) onPlaceBet;
+  final Future<void> Function(Map<String, int> stakes) onPlaceBets;
 
   const XocXocBettingTable({
     super.key,
@@ -31,7 +32,7 @@ class XocXocBettingTable extends StatefulWidget {
     required this.result,
     this.confirmedCredit,
     this.confirmedBets = const {},
-    required this.onPlaceBet,
+    required this.onPlaceBets,
   });
 
   @override
@@ -52,6 +53,8 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   final bets = <String, int>{for (final gate in gates) gate.$1: 0};
   final acknowledgedBets = <String, int>{};
+  Map<String, int>? awaitingBets;
+  Map<String, int>? awaitingBaseline;
   int? lastKnownBalance;
   int? optimisticBalance;
   int selectedChip = 10000;
@@ -112,11 +115,26 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     if (oldWidget.roundId != widget.roundId) {
       optimisticBalance = null;
       acknowledgedBets.clear();
+      awaitingBets = null;
+      awaitingBaseline = null;
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
       sending = false;
-    } else if (widget.balance != null &&
+    } else if (awaitingBets != null &&
+        !sending &&
+        awaitingBets!.entries.every(
+          (entry) =>
+              (widget.confirmedBets[entry.key] ?? 0) >=
+              (awaitingBaseline![entry.key] ?? 0) + entry.value,
+        )) {
+      for (final entry in awaitingBets!.entries) {
+        bets[entry.key] = (bets[entry.key]! - entry.value).clamp(0, 1000000);
+      }
+      awaitingBets = null;
+      awaitingBaseline = null;
+    }
+    if (widget.balance != null &&
         optimisticBalance != null &&
         (widget.balance! <= optimisticBalance! ||
             (widget.status == 'settled' &&
@@ -160,50 +178,48 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
       return;
     }
     final roundId = widget.roundId;
-    final placeBet = widget.onPlaceBet;
-    final selected = bets.entries.where((entry) => entry.value > 0).toList();
-    String? attemptedSide;
-    var sent = 0;
-    setState(() => sending = true);
+    final selected = <String, int>{
+      for (final entry in bets.entries)
+        if (entry.value > 0) entry.key: entry.value,
+    };
+    final before = {for (final side in selected.keys) side: confirmed(side)};
+    final balanceAfter = displayBalance! - total;
+    setState(() {
+      sending = true;
+      awaitingBets = selected;
+      awaitingBaseline = before;
+      optimisticBalance = balanceAfter;
+    });
     try {
-      for (final entry in selected) {
-        if (!mounted ||
-            widget.roundId != roundId ||
-            widget.offline ||
-            widget.status != 'open' ||
-            widget.secondsLeft <= 0) {
-          break;
-        }
-        attemptedSide = entry.key;
-        final before = confirmed(entry.key);
-        final balanceBefore = displayBalance!;
-        await placeBet(entry.key, entry.value);
-        if (!mounted || widget.roundId != roundId) return;
-        setState(() {
-          // Keep the accepted gate visible until the Firestore bet snapshot arrives.
-          final acknowledged = before + entry.value;
-          if (acknowledged > confirmed(entry.key)) {
-            acknowledgedBets[entry.key] = acknowledged;
-          }
+      // One server transaction: all selected gates are accepted or none are.
+      await widget.onPlaceBets(selected);
+      if (!mounted || widget.roundId != roundId) return;
+      setState(() {
+        for (final entry in selected.entries) {
+          acknowledgedBets[entry.key] = before[entry.key]! + entry.value;
           bets[entry.key] = 0;
-          // Wallet snapshots can lag the accepted bet. Reserve its stake until
-          // Firestore catches up so a second ALL IN never uses stale funds.
-          optimisticBalance = (balanceBefore - entry.value).clamp(0, 1000000);
-        });
-        sent++;
-        attemptedSide = null;
-      }
-      if (mounted && widget.roundId == roundId && sent < selected.length) {
-        _notice(
-          'Đã nhận $sent/${selected.length} cửa; các cửa còn lại chưa gửi.',
-        );
-      }
+        }
+        awaitingBets = null;
+        awaitingBaseline = null;
+      });
     } catch (error) {
       if (mounted && widget.roundId == roundId) {
-        // A network failure might have reached the server. Do not replay the
-        // attempted gate with a new requestId; only unsent gates remain draft.
-        if (attemptedSide != null) {
-          setState(() => bets[attemptedSide!] = 0);
+        // An uncertain response keeps its requestId in PendingMutationStore;
+        // a later server snapshot clears the draft without sending it twice.
+        if (error is! FirebaseFunctionsException ||
+            const {
+              'invalid-argument',
+              'failed-precondition',
+              'permission-denied',
+              'unauthenticated',
+              'already-exists',
+              'not-found',
+            }.contains(error.code)) {
+          setState(() {
+            awaitingBets = null;
+            awaitingBaseline = null;
+            optimisticBalance = null;
+          });
         }
         _notice(betFailureNotice(error));
       }

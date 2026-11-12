@@ -354,6 +354,36 @@ test('Xóc Đĩa: repeated requests, multi-gate all-in, ledger and per-round cap
     assert.equal((await wallet.get()).data().balance, 33360);
     assert.equal((await wallet.collection('operations').doc(`result_${roundId}`).get()).data().delta, 33360);
 
+    // One batch is one atomic debit/ledger entry. Retry cannot double charge.
+    await wallet.update({balance: 50000});
+    const batched = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
+    const multi = {roundId: batched.roundId, requestId: 'batch-four',
+      stakes: {chan: 10000, le: 10000, red3: 10000, white3: 10000}};
+    const receipt = await player.call('placeBets', multi);
+    assert.deepEqual(receipt.stakes, multi.stakes);
+    assert.equal(receipt.amount, 40000);
+    assert.equal((await wallet.get()).data().balance, 10000);
+    assert.equal((await player.call('placeBets', multi)).amount, 40000);
+    assert.equal((await wallet.get()).data().balance, 10000);
+    await assert.rejects(player.call('placeBets', {...multi,
+      stakes: {...multi.stakes, red3: 20000}}), /requestId/);
+    const more = {roundId: batched.roundId, requestId: 'batch-all-in', stakes: {red4: 10000}};
+    assert.equal((await player.call('placeBets', more)).amount, 50000);
+    assert.equal((await wallet.get()).data().balance, 0);
+    const batchRound = db.doc(`rounds/${batched.roundId}`);
+    assert.equal((await batchRound.get()).data().betCount, 1);
+    assert.equal((await batchRound.get()).data().playerCounts.red4, 1);
+    assert.equal((await wallet.collection('operations').doc(`bet_${batched.roundId}_batch-four`).get()).data().delta, -40000);
+    assert.equal((await wallet.collection('operations').doc(`bet_${batched.roundId}_batch-all-in`).get()).data().delta, -10000);
+    await assert.rejects(player.call('placeBets', {roundId: batched.roundId,
+      requestId: 'batch-insufficient', stakes: {chan: 1000, le: 1000}}), /Không đủ điểm/);
+    assert.equal((await batchRound.collection('bets').doc(player.user.uid).get()).data().amount, 50000);
+    await batchRound.update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
+    await assert.rejects(player.call('placeBets', {roundId: batched.roundId,
+      requestId: 'batch-late', stakes: {chan: 1000, le: 1000}}), /Đã khóa cược/);
+    assert.equal((await batchRound.collection('bets').doc(player.user.uid).get()).data().amount, 50000);
+    await boss.call('cancelRound', {roundId: batched.roundId, reason: 'Kết thúc kiểm thử cược nhiều cửa'});
+
     // A funded wallet cannot bypass the aggregate one-million-per-player-per-round limit.
     await wallet.update({balance: 1005000});
     const capped = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});

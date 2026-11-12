@@ -28,3 +28,5 @@ Cầu chỉ mô tả kết quả đã chốt, **không dự đoán** hay thay đ
 ## Chưa kiểm chứng
 
 Chưa chạy source gốc để so sánh từng trace, chưa có bộ fixture chính thức cho vòng Poker/Gà Ba Cây, chưa test tải đông người hay release production. Firebase Emulator mỗi máy có dữ liệu riêng; thay đổi schema cược từ `side/amount` sang `stakes/amount` **không hỗ trợ phiên đang mở của bản cũ**—dừng/xóa dữ liệu emulator thử nghiệm trước khi đổi phiên bản. Đã merge cấu hình Firebase Android thật từ nhánh `firebase`, nhưng Functions/rules chưa deploy và không có APK release chơi chung đã kiểm chứng. Đây là phạm vi còn lại cho nhóm trước khi tuyên bố “logic đủ 5 trò theo Go88”.
+
+Xóc Xóc trên app gửi một lần xác nhận nhiều cửa qua `placeBets` với một `requestId`: toàn bộ cửa được trừ một lần hoặc không cửa nào được nhận. Cược bổ sung vẫn được phép trong cùng phiên khi còn thời gian/số dư; lệnh `placeBet` một cửa cũ vẫn tương thích.

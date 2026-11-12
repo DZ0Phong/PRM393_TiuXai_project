@@ -21,6 +21,7 @@ void main() {
     required String roundId,
     required Future<void> Function(String, int) place,
     Future<void> Function()? refund,
+    Future<void> Function(Map<String, int>)? placeBatch,
     bool xocXoc = false,
     int? balance = 50000,
     bool enabled = true,
@@ -45,7 +46,13 @@ void main() {
                     offline: offline,
                     result: null,
                     confirmedBets: confirmed,
-                    onPlaceBet: place,
+                    onPlaceBets:
+                        placeBatch ??
+                        (stakes) async {
+                          for (final entry in stakes.entries) {
+                            await place(entry.key, entry.value);
+                          }
+                        },
                   )
                 : BauCuaBettingTable(
                     roundId: roundId,
@@ -241,111 +248,77 @@ void main() {
   });
 
   testWidgets(
-    'Xóc Xóc sends four gates despite its own transient busy rebuild',
+    'Xóc Xóc sends all four gates in one request, never a partial batch',
     (tester) async {
-      final first = Completer<void>();
-      final calls = <String>[];
-      Future<void> place(String side, int amount) {
-        calls.add('$side:$amount');
-        return calls.length == 1 ? first.future : Future.value();
+      final pending = Completer<void>();
+      final calls = <Map<String, int>>[];
+      Future<void> send(Map<String, int> stakes) {
+        calls.add(Map.of(stakes));
+        return pending.future;
       }
 
-      await showTable(tester, roundId: 'one', place: place, xocXoc: true);
+      Future<void> unused(String side, int amount) async {}
+      await showTable(
+        tester,
+        roundId: 'one',
+        place: unused,
+        placeBatch: send,
+        xocXoc: true,
+      );
       for (final side in ['CHẴN', 'LẺ', '3 ĐỎ 1 TRẮNG', '3 TRẮNG 1 ĐỎ']) {
         await tapLabel(tester, side);
       }
       await tapLabel(tester, 'XÁC NHẬN CƯỢC • 40.000 VNĐ');
-      expect(calls, ['chan:10000']);
-
-      // RoundScreen briefly disables inputs and lacks a wallet snapshot while
-      // the first callable is pending; this is not a rejection of other gates.
+      expect(calls, [
+        {'chan': 10000, 'le': 10000, 'red3': 10000, 'white3': 10000},
+      ]);
       await showTable(
         tester,
         roundId: 'one',
-        place: place,
+        place: unused,
+        placeBatch: send,
         xocXoc: true,
         balance: null,
         enabled: false,
       );
-      first.complete();
+      expect(find.text('ĐANG GỬI...'), findsOneWidget);
+      pending.complete();
       await tester.pump();
-      expect(calls, ['chan:10000', 'le:10000', 'red3:10000', 'white3:10000']);
       expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNWidgets(4));
-      expect(find.textContaining('Chưa gửi: 10.000 VNĐ'), findsNothing);
-      expect(find.text('10.000 VNĐ'), findsNWidgets(2));
-
-      // A delayed Firestore snapshot must not drop or double-count receipts.
-      await showTable(
-        tester,
-        roundId: 'one',
-        place: place,
-        xocXoc: true,
-        balance: 10000,
-        confirmed: const {'chan': 10000},
-      );
-      expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNWidgets(4));
-      expect(find.textContaining('Đã cược: 20.000 VNĐ'), findsNothing);
+      expect(find.textContaining('Chưa gửi:'), findsNothing);
     },
   );
 
-  testWidgets(
-    'Xóc Xóc rejects a later gate without claiming four were charged',
-    (tester) async {
-      final calls = <String>[];
-      await showTable(
-        tester,
-        roundId: 'one',
-        xocXoc: true,
-        place: (side, amount) async {
-          calls.add('$side:$amount');
-          if (side == 'le')
-            throw FirebaseFunctionsException(
-              code: 'failed-precondition',
-              message: 'Đã khóa cược',
-            );
-        },
-      );
-      for (final side in ['CHẴN', 'LẺ', '3 ĐỎ 1 TRẮNG', '3 TRẮNG 1 ĐỎ']) {
-        await tapLabel(tester, side);
-      }
-      await tapLabel(tester, 'XÁC NHẬN CƯỢC • 40.000 VNĐ');
-      await tester.pump();
-      expect(calls, ['chan:10000', 'le:10000']);
-      expect(find.text('Đã cược: 10.000 VNĐ'), findsOneWidget);
-      expect(find.text('Chưa gửi: 10.000 VNĐ'), findsNWidgets(2));
-      expect(
-        find.text('Đã khóa cược. Cược đã nhận vẫn được giữ.'),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets('Xóc Xóc deadline rejection is concise and stops other gates', (
+  testWidgets('Xóc Xóc deadline rejection retains the whole draft', (
     tester,
   ) async {
-    final calls = <String>[];
+    final calls = <Map<String, int>>[];
     await showTable(
       tester,
       roundId: 'one',
-      place: (side, amount) async {
-        calls.add('$side:$amount');
+      place: (_, _) async {},
+      xocXoc: true,
+      placeBatch: (stakes) async {
+        calls.add(stakes);
         throw FirebaseFunctionsException(
           code: 'failed-precondition',
           message: 'Đã khóa cược',
         );
       },
-      xocXoc: true,
     );
     await tapLabel(tester, 'CHẴN');
     await tapLabel(tester, 'LẺ');
     await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
     await tester.pump();
-    expect(calls, ['chan:10000']);
+    expect(calls, [
+      {'chan': 10000, 'le': 10000},
+    ]);
+    expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNothing);
+    expect(find.textContaining('Chưa gửi: 10.000 VNĐ'), findsNWidgets(2));
     expect(
       find.text('Đã khóa cược. Cược đã nhận vẫn được giữ.'),
       findsOneWidget,
     );
-    expect(find.textContaining('firebase_functions/'), findsNothing);
   });
 
   testWidgets('Bầu Cua deadline rejection shows no exception stack', (
@@ -374,88 +347,4 @@ void main() {
     );
     expect(find.textContaining('firebase_functions/'), findsNothing);
   });
-
-  testWidgets('Xóc Xóc deadline stops remaining multi-gate batch', (
-    tester,
-  ) async {
-    final first = Completer<void>();
-    final calls = <String>[];
-    Future<void> place(String side, int amount) {
-      calls.add('$side:$amount');
-      return first.future;
-    }
-
-    await showTable(tester, roundId: 'one', place: place, xocXoc: true);
-    await tapLabel(tester, 'CHẴN');
-    await tapLabel(tester, 'LẺ');
-    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
-    expect(calls, ['chan:10000']);
-    await showTable(
-      tester,
-      roundId: 'one',
-      place: place,
-      xocXoc: true,
-      secondsLeft: 0,
-      enabled: false,
-    );
-    first.complete();
-    await tester.pump();
-    expect(calls, ['chan:10000']);
-  });
-
-  testWidgets('Xóc Xóc reconnect stops batch and retains unsent gate', (
-    tester,
-  ) async {
-    final pending = Completer<void>();
-    final calls = <String>[];
-    Future<void> place(String side, int amount) {
-      calls.add('$side:$amount');
-      return calls.length == 1 ? pending.future : Future.value();
-    }
-
-    await showTable(tester, roundId: 'one', place: place, xocXoc: true);
-    await tapLabel(tester, 'CHẴN');
-    await tapLabel(tester, 'LẺ');
-    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 20.000 VNĐ');
-    await showTable(
-      tester,
-      roundId: 'one',
-      place: place,
-      xocXoc: true,
-      enabled: false,
-      offline: true,
-    );
-    pending.complete();
-    await tester.pump();
-    expect(calls, ['chan:10000']);
-    await showTable(tester, roundId: 'one', place: place, xocXoc: true);
-    await tapLabel(tester, 'XÁC NHẬN CƯỢC • 10.000 VNĐ');
-    await tester.pump();
-    expect(calls, ['chan:10000', 'le:10000']);
-  });
-
-  testWidgets(
-    'Xóc Xóc rapid confirm and stale round stop old multi-gate batch',
-    (tester) async {
-      final pending = Completer<void>();
-      final calls = <String>[];
-      Future<void> place(String side, int amount) {
-        calls.add('$side:$amount');
-        return calls.length == 1 ? pending.future : Future.value();
-      }
-
-      await showTable(tester, roundId: 'one', place: place, xocXoc: true);
-      await tapLabel(tester, 'CHẴN');
-      await tapLabel(tester, 'LẺ');
-      final confirm = find.textContaining('XÁC NHẬN CƯỢC');
-      await tester.ensureVisible(confirm);
-      await tester.tap(confirm);
-      await tester.tap(confirm);
-      expect(calls, ['chan:10000']);
-      await showTable(tester, roundId: 'two', place: place, xocXoc: true);
-      pending.complete();
-      await tester.pump();
-      expect(calls, ['chan:10000']);
-    },
-  );
 }
