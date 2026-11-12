@@ -304,6 +304,76 @@ test('Xóc Xóc four gates each debit once and preserve separate stakes', async 
   } finally { await Promise.all(clients.map(deleteApp)); await deleteApp(app); }
 });
 
+test('Xóc Đĩa: repeated requests, multi-gate all-in, ledger and per-round cap', async () => {
+  const app = adminApp({projectId}, `xoc-bets-${Date.now()}`);
+  const db = getFirestore(app); const apps = [];
+  async function client(label) {
+    const a = initializeApp({projectId, apiKey: 'demo-key', appId: 'demo'}, `xoc-${label}-${Date.now()}`);
+    apps.push(a);
+    const auth = getAuth(a); connectAuthEmulator(auth, `http://127.0.0.1:${authPort}`, {disableWarnings: true});
+    const f = getFunctions(a, 'asia-southeast1'); connectFunctionsEmulator(f, '127.0.0.1', functionsPort);
+    const {user} = await createUserWithEmailAndPassword(auth, `xoc-${label}-${Date.now()}@example.com`, 'password123');
+    return {user, call: async (name, data = {}) => (await httpsCallable(f, name)(data)).data};
+  }
+  try {
+    const boss = await client('admin');
+    await adminAuth(app).setCustomUserClaims(boss.user.uid, {admin: true});
+    await boss.user.getIdToken(true); await boss.call('ensureProfile');
+    const player = await client('player'); await player.call('ensureProfile');
+    const wallet = db.doc(`users/${player.user.uid}`);
+    await wallet.update({balance: 10000}); // Test a small wallet for the all-in sequence.
+    const {roundId} = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
+    const round = db.doc(`rounds/${roundId}`), bet = round.collection('bets').doc(player.user.uid);
+    const first = {roundId, side: 'chan', amount: 1000, requestId: 'xoc-first'};
+    const [accepted, duplicate] = await Promise.all([player.call('placeBet', first), player.call('placeBet', first)]);
+    assert.equal(accepted.amount, 1000);
+    assert.equal(duplicate.amount, 1000);
+    assert.equal((await wallet.get()).data().balance, 9000);
+    for (const [side, amount, requestId] of [
+      ['chan', 1000, 'xoc-repeat'], ['red4', 2000, 'xoc-red4'], ['le', 6000, 'xoc-all-in'],
+    ]) await player.call('placeBet', {roundId, side, amount, requestId});
+    assert.equal((await wallet.get()).data().balance, 0);
+    assert.deepEqual((await bet.get()).data().stakes, {chan: 2000, red4: 2000, le: 6000});
+    assert.equal((await bet.get()).data().amount, 10000);
+    const stats = (await round.get()).data();
+    assert.equal(stats.betCount, 1);
+    for (const [side, amount] of [['chan', 2000], ['red4', 2000], ['le', 6000]]) {
+      assert.equal(stats.totals[side], amount);
+      assert.equal(stats.playerCounts[side], 1);
+    }
+    const operations = await wallet.collection('operations').get();
+    const debits = operations.docs.map(d => d.data()).filter(o => o.kind === 'bet' && o.roundId === roundId);
+    assert.equal(debits.length, 4);
+    assert.equal(debits.reduce((sum, op) => sum + op.delta, 0), -10000);
+    await assert.rejects(player.call('placeBet', {roundId, side: 'white4', amount: 1000, requestId: 'xoc-empty'}), /Không đủ điểm/);
+    assert.equal((await wallet.get()).data().balance, 0);
+    await boss.call('setRoundOutcome', {roundId, result: [1, 1, 1, 1], reason: 'Chốt kiểm thử Xóc Đĩa'});
+    await round.update({closesAt: Timestamp.fromMillis(Date.now() - 1000)});
+    await player.call('advanceRandomRound', {roundId});
+    assert.equal((await bet.get()).data().credit, 33360); // 2,000 × 1.98 + 2,000 × 14.7
+    assert.equal((await wallet.get()).data().balance, 33360);
+    assert.equal((await wallet.collection('operations').doc(`result_${roundId}`).get()).data().delta, 33360);
+
+    // A funded wallet cannot bypass the aggregate one-million-per-player-per-round limit.
+    await wallet.update({balance: 1005000});
+    const capped = await boss.call('startRound', {game: 'xoc_xoc', mode: 'admin'});
+    await player.call('placeBet', {roundId: capped.roundId, side: 'chan', amount: 500000, requestId: 'cap-chan'});
+    await player.call('placeBet', {roundId: capped.roundId, side: 'red4', amount: 500000, requestId: 'cap-red4'});
+    await assert.rejects(player.call('placeBet', {roundId: capped.roundId, side: 'le', amount: 1000, requestId: 'cap-extra'}), /Tổng cược mỗi người tối đa/);
+    await assert.rejects(player.call('placeBet', {roundId: capped.roundId, side: 'le', amount: 1001000, requestId: 'cap-single'}), /Cược không hợp lệ/);
+    assert.equal((await wallet.get()).data().balance, 5000);
+    assert.equal((await db.doc(`rounds/${capped.roundId}/bets/${player.user.uid}`).get()).data().amount, 1000000);
+    assert.equal((await db.doc(`rounds/${capped.roundId}`).get()).data().betCount, 1);
+    assert.equal((await wallet.collection('operations').doc(`bet_${capped.roundId}_cap-extra`).get()).exists, false);
+
+    // A retry must return the originally accepted bet, not the later aggregate or settlement fields.
+    const replay = await player.call('placeBet', first);
+    assert.equal((await wallet.get()).data().balance, 5000);
+    assert.equal(replay.amount, 1000);
+    assert.deepEqual(replay.stakes, {chan: 1000});
+  } finally { await Promise.all(apps.map(deleteApp)); }
+});
+
 test('callable player management: point adjustment, account lock and audit', async () => {
   const app = adminApp({projectId}, `player-management-${Date.now()}`);
   const db = getFirestore(app);

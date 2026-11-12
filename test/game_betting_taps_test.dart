@@ -272,7 +272,7 @@ void main() {
       expect(calls, ['chan:10000', 'le:10000', 'red3:10000', 'white3:10000']);
       expect(find.textContaining('Đã cược: 10.000 VNĐ'), findsNWidgets(4));
       expect(find.textContaining('Chưa gửi: 10.000 VNĐ'), findsNothing);
-      expect(find.text('50.000 VNĐ'), findsOneWidget);
+      expect(find.text('10.000 VNĐ'), findsNWidgets(2));
 
       // A delayed Firestore snapshot must not drop or double-count receipts.
       await showTable(

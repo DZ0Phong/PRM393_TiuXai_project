@@ -53,6 +53,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
   final bets = <String, int>{for (final gate in gates) gate.$1: 0};
   final acknowledgedBets = <String, int>{};
   int? lastKnownBalance;
+  int? optimisticBalance;
   int selectedChip = 10000;
   bool allInSelected = false;
   bool sending = false;
@@ -71,9 +72,15 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     0,
     (totalConfirmed, gate) => totalConfirmed + confirmed(gate.$1),
   );
-  int? get displayBalance => widget.balance ?? lastKnownBalance;
+  int? get displayBalance {
+    final known = widget.balance ?? lastKnownBalance;
+    if (known == null) return optimisticBalance;
+    if (optimisticBalance == null) return known;
+    return known < optimisticBalance! ? known : optimisticBalance;
+  }
+
   int get allInAmount {
-    final balance = widget.balance;
+    final balance = displayBalance;
     if (balance == null) return 0;
     final available = (balance - total).clamp(0, 1000000);
     final limit = 1000000 - confirmedTotal - total;
@@ -84,7 +91,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   bool get canBet =>
       widget.enabled &&
-      widget.balance != null &&
+      displayBalance != null &&
       widget.status == 'open' &&
       widget.secondsLeft > 0 &&
       !sending;
@@ -103,11 +110,20 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     super.didUpdateWidget(oldWidget);
     if (widget.balance != null) lastKnownBalance = widget.balance;
     if (oldWidget.roundId != widget.roundId) {
+      optimisticBalance = null;
       acknowledgedBets.clear();
       bets.updateAll((_, _) => 0);
       revealed = false;
       allInSelected = false;
       sending = false;
+    } else if (widget.balance != null &&
+        optimisticBalance != null &&
+        (widget.balance! <= optimisticBalance! ||
+            (widget.status == 'settled' &&
+                (widget.confirmedCredit ?? 0) > 0 &&
+                widget.balance! >=
+                    optimisticBalance! + widget.confirmedCredit!))) {
+      optimisticBalance = null;
     }
     if (oldWidget.status != 'settled' && widget.status == 'settled') {
       revealed = true;
@@ -116,7 +132,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   void _add(String side) {
     if (!canBet) return;
-    final balance = widget.balance!;
+    final balance = displayBalance!;
     final amount = allInSelected ? allInAmount : selectedChip;
     final next = total + amount;
     if (amount <= 0) {
@@ -139,7 +155,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
 
   Future<void> _submit() async {
     if (!canBet || total == 0) return;
-    if (total > widget.balance! || total + confirmedTotal > 1000000) {
+    if (total > displayBalance! || total + confirmedTotal > 1000000) {
       _notice('Số dư hoặc hạn mức cược đã thay đổi; hãy xóa cược chưa gửi.');
       return;
     }
@@ -160,6 +176,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
         }
         attemptedSide = entry.key;
         final before = confirmed(entry.key);
+        final balanceBefore = displayBalance!;
         await placeBet(entry.key, entry.value);
         if (!mounted || widget.roundId != roundId) return;
         setState(() {
@@ -169,6 +186,9 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
             acknowledgedBets[entry.key] = acknowledged;
           }
           bets[entry.key] = 0;
+          // Wallet snapshots can lag the accepted bet. Reserve its stake until
+          // Firestore catches up so a second ALL IN never uses stale funds.
+          optimisticBalance = (balanceBefore - entry.value).clamp(0, 1000000);
         });
         sent++;
         attemptedSide = null;
@@ -728,7 +748,7 @@ class _XocXocBettingTableState extends State<XocXocBettingTable> {
     onPressed:
         canBet &&
             total > 0 &&
-            total <= widget.balance! &&
+            total <= displayBalance! &&
             total + confirmedTotal <= 1000000
         ? _submit
         : null,
